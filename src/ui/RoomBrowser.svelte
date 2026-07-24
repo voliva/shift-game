@@ -3,7 +3,9 @@
 
   export let rooms: Room[]
   export let loading: boolean
+  export let externalError = ''
   export let onBack: () => void
+  export let onRefresh: () => void
   export let onJoin: (roomId: string, password: string) => Promise<string | undefined>
   export let onCreate: (name: string, password: string) => Promise<void>
 
@@ -42,7 +44,10 @@
       <p class="eyebrow">ONLINE PLAY</p>
       <h1>Find a room</h1>
     </div>
-    <button class="text-button" onclick={onBack}>Back</button>
+    <div class="panel-actions">
+      <button class="text-button" onclick={onRefresh}>Refresh</button>
+      <button class="text-button" onclick={onBack}>Back</button>
+    </div>
   </header>
   {#if loading}
     <p class="loading">Looking for rooms...</p>
@@ -64,6 +69,7 @@
       <input aria-label="New room password" name="room-password" autocomplete="off" type="text" placeholder="Password" bind:value={newRoomPassword} />
       <button class="secondary" disabled={creatingRoom}>{creatingRoom ? 'Creating...' : 'Create room'}</button>
     </form>
+    {#if externalError}<p class="form-error">{externalError}</p>{/if}
     {#if passwordPromptRoom}
       <div class="dialog-backdrop" role="presentation">
         <form class="password-dialog" autocomplete="off" onsubmit={submitJoin}>

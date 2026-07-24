@@ -18,6 +18,7 @@
   let screen: Screen = 'menu'
   let rooms: Room[] = []
   let loadingRooms = false
+  let roomsError = ''
   let currentRoom: Room | undefined
   let boatName = ''
   let gateDistance = 6_000
@@ -34,8 +35,7 @@
     const roomId = params.get('roomId')
     const password = params.get('password')
     if (roomId && password) {
-      await openOnline()
-      await joinRoom(roomId, password)
+      await joinFromUrl(roomId, password)
     }
   })
 
@@ -45,10 +45,28 @@
     stopGame()
     screen = 'rooms'
     loadingRooms = true
+    roomsError = ''
     rooms = []
-    await delay(550)
-    rooms = getMockRooms()
+    rooms = await fetchRooms()
     loadingRooms = false
+  }
+
+  async function joinFromUrl(roomId: string, password: string): Promise<void> {
+    stopGame()
+    screen = 'rooms'
+    loadingRooms = true
+    roomsError = ''
+    rooms = await fetchRooms()
+    const error = await joinRoom(roomId, password)
+    if (error) {
+      roomsError = error
+      loadingRooms = false
+    }
+  }
+
+  async function fetchRooms(): Promise<Room[]> {
+    await delay(550)
+    return getMockRooms()
   }
 
   async function joinRoom(roomId: string, password: string): Promise<string | undefined> {
@@ -61,6 +79,8 @@
     currentRoom = { ...room, players: [...room.players.filter((player) => player.id !== PLAYER_ID), localPlayer] }
     gateDistance = currentRoom.gateDistance
     gatesToWin = currentRoom.gatesToWin
+    updateRoomUrl(currentRoom)
+    loadingRooms = false
     screen = 'lobby'
     return undefined
   }
@@ -75,6 +95,7 @@
     currentRoom = room
     gateDistance = room.gateDistance
     gatesToWin = room.gatesToWin
+    updateRoomUrl(room)
     screen = 'lobby'
     window.setTimeout(() => {
       if (currentRoom?.id === room.id) currentRoom = { ...currentRoom, players: [...currentRoom.players, { id: 'mock-sailor', name: 'Mock Sailor' }] }
@@ -135,6 +156,20 @@
     ranking = []
   }
 
+  function updateRoomUrl(room: Room): void {
+    const url = new URL(window.location.href)
+    url.searchParams.set('roomId', room.id)
+    url.searchParams.set('password', room.password)
+    window.history.replaceState({}, '', url)
+  }
+
+  function clearRoomUrl(): void {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('roomId')
+    url.searchParams.delete('password')
+    window.history.replaceState({}, '', url)
+  }
+
   function leaveLobby(): void {
     if (!currentRoom) return
     const remainingPlayers = currentRoom.players.filter((player) => player.id !== PLAYER_ID)
@@ -144,6 +179,7 @@
       currentRoom = { ...currentRoom, players: remainingPlayers.map((player) => ({ ...player, isAdmin: player.id === nextAdmin.id })) }
     }
     currentRoom = undefined
+    clearRoomUrl()
     screen = 'rooms'
   }
 
@@ -160,7 +196,7 @@
     {#if screen === 'menu'}
       <MainMenu onLocalRace={beginCountdown} onOnlinePlay={openOnline} />
     {:else if screen === 'rooms'}
-      <RoomBrowser {rooms} loading={loadingRooms} onBack={() => screen = 'menu'} onJoin={joinRoom} onCreate={createRoom} />
+      <RoomBrowser {rooms} loading={loadingRooms} externalError={roomsError} onBack={() => screen = 'menu'} onRefresh={openOnline} onJoin={joinRoom} onCreate={createRoom} />
     {:else if screen === 'lobby' && currentRoom}
       <RoomLobby room={currentRoom} boatName={boatName} isAdmin={localPlayerIsAdmin()} onLeave={leaveLobby} onBoatNameChange={updateBoatName} onSettingsChange={updateRaceSettings} onStart={startOnlineRace} />
     {/if}
