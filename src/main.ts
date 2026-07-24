@@ -11,7 +11,7 @@ const BOAT_SPEED = 120
 const MAX_TRAIL_POINTS = 1_200
 const TACK_DURATION_SECONDS = 0.5
 const UPWIND_SPEED = 0.8
-const DOOR_DISTANCE = 1_000
+const DOOR_DISTANCE = 6_000
 const DOOR_WIDTH = 400
 const BEAM_SPEED_FACTOR = 1.5
 const LAYLINE_LENGTH = 12_000
@@ -181,26 +181,29 @@ function drawBoat(): void {
 
 function drawDoors(): void {
   const currentDoorY = Math.floor(boat.y / DOOR_DISTANCE) * DOOR_DISTANCE
-  const doorY = beaming ? blockedDoorY : currentDoorY + DOOR_DISTANCE
-  const left = worldToScreen({ x: -DOOR_WIDTH / 2, y: doorY })
-  const right = worldToScreen({ x: DOOR_WIDTH / 2, y: doorY })
+  const doorYs = [currentDoorY, currentDoorY + DOOR_DISTANCE]
 
-  context.strokeStyle = beaming ? '#ff7f0a' : 'rgba(255, 127, 10, 0.55)'
-  context.lineWidth = 3
-  context.beginPath()
-  context.moveTo(left.x, left.y)
-  context.lineTo(right.x, right.y)
-  context.stroke()
-  context.fillStyle = context.strokeStyle
-  context.beginPath()
-  context.arc(left.x, left.y, 6, 0, Math.PI * 2)
-  context.arc(right.x, right.y, 6, 0, Math.PI * 2)
-  context.fill()
+  for (const doorY of doorYs) {
+    const left = worldToScreen({ x: -DOOR_WIDTH / 2, y: doorY })
+    const right = worldToScreen({ x: DOOR_WIDTH / 2, y: doorY })
+
+    context.strokeStyle = '#ff7f0a'
+    context.lineWidth = 3
+    context.beginPath()
+    context.moveTo(left.x, left.y)
+    context.lineTo(right.x, right.y)
+    context.stroke()
+    context.fillStyle = context.strokeStyle
+    context.beginPath()
+    context.arc(left.x, left.y, 6, 0, Math.PI * 2)
+    context.arc(right.x, right.y, 6, 0, Math.PI * 2)
+    context.fill()
+  }
 }
 
 function drawLaylines(): void {
   const currentDoorY = Math.floor(boat.y / DOOR_DISTANCE) * DOOR_DISTANCE
-  const gateY = beaming ? blockedDoorY : currentDoorY + DOOR_DISTANCE
+  const gateYs = [currentDoorY, currentDoorY + DOOR_DISTANCE]
   const windRadians = (meanWindDirection * Math.PI) / 180
   const laylines = [
     { x: -DOOR_WIDTH / 2, inboundHeading: windRadians + Math.PI / 4 },
@@ -211,14 +214,16 @@ function drawLaylines(): void {
   context.lineWidth = 2
   context.setLineDash([8, 8])
   context.beginPath()
-  for (const { x, inboundHeading } of laylines) {
-    const start = worldToScreen({ x, y: gateY })
-    const end = worldToScreen({
-      x: x - Math.sin(inboundHeading) * LAYLINE_LENGTH,
-      y: gateY - Math.cos(inboundHeading) * LAYLINE_LENGTH,
-    })
-    context.moveTo(start.x, start.y)
-    context.lineTo(end.x, end.y)
+  for (const gateY of gateYs) {
+    for (const { x, inboundHeading } of laylines) {
+      const start = worldToScreen({ x, y: gateY })
+      const end = worldToScreen({
+        x: x - Math.sin(inboundHeading) * LAYLINE_LENGTH,
+        y: gateY - Math.cos(inboundHeading) * LAYLINE_LENGTH,
+      })
+      context.moveTo(start.x, start.y)
+      context.lineTo(end.x, end.y)
+    }
   }
   context.stroke()
   context.setLineDash([])
@@ -233,8 +238,12 @@ function drawCourseNavigator(): void {
   const startY = top + height - 26
   const finishY = top + 36
   const middleY = (startY + finishY) / 2
-  const gateHalfWidth = 6
-  const tunnelHalfWidth = 65
+  const mapScale = Math.min(
+    (width - 24) / (DOOR_DISTANCE + DOOR_WIDTH),
+    (startY - finishY) / DOOR_DISTANCE,
+  )
+  const gateHalfWidth = (DOOR_WIDTH / 2) * mapScale
+  const tunnelHalfWidth = (DOOR_DISTANCE / 2 + DOOR_WIDTH / 2) * mapScale
   // Stage keeps the boat numerically just beyond a missed gate while it beams sideways.
   // Keep it on the completed segment in the navigator until it is actually released.
   const segmentStartY = beaming
@@ -242,7 +251,7 @@ function drawCourseNavigator(): void {
     : Math.floor(boat.y / DOOR_DISTANCE) * DOOR_DISTANCE
   const progress = Math.max(0, Math.min(1, (boat.y - segmentStartY) / DOOR_DISTANCE))
   const boatY = startY + (finishY - startY) * progress
-  const boatX = centerX + Math.max(-tunnelHalfWidth, Math.min(tunnelHalfWidth, boat.x / 50))
+  const boatX = centerX + Math.max(-tunnelHalfWidth, Math.min(tunnelHalfWidth, boat.x * mapScale))
 
   context.save()
   context.globalAlpha = 0.8
