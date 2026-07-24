@@ -1,22 +1,22 @@
 <script lang="ts">
-  import type { Room } from './roomTypes'
+  import type { RoomSummary } from './roomTypes'
 
-  export let rooms: Room[]
+  export let rooms: RoomSummary[]
   export let loading: boolean
   export let externalError = ''
   export let onBack: () => void
   export let onRefresh: () => void
   export let onJoin: (roomId: string, password: string) => Promise<string | undefined>
-  export let onCreate: (name: string, password: string) => Promise<void>
+  export let onCreate: (name: string, password: string) => Promise<string | undefined>
 
-  let passwordPromptRoom: Room | undefined
+  let passwordPromptRoom: RoomSummary | undefined
   let roomPassword = ''
   let roomError = ''
   let newRoomName = ''
   let newRoomPassword = ''
   let creatingRoom = false
 
-  function selectRoom(room: Room): void {
+  function selectRoom(room: RoomSummary): void {
     passwordPromptRoom = room
     roomPassword = ''
     roomError = ''
@@ -33,7 +33,7 @@
     event.preventDefault()
     if (!newRoomName.trim() || !newRoomPassword) return
     creatingRoom = true
-    await onCreate(newRoomName, newRoomPassword)
+    roomError = (await onCreate(newRoomName, newRoomPassword)) ?? ''
     creatingRoom = false
   }
 </script>

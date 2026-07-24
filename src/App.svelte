@@ -3,20 +3,19 @@
   import { GameSession, type RankingEntry } from './game/GameSession'
   import Credits from './ui/Credits.svelte'
   import MainMenu from './ui/MainMenu.svelte'
-  import { getMockRooms } from './ui/mockRooms'
+  import { createRoom as createServerRoom, fetchRooms, joinRoom as joinServerRoom, type RoomConnection } from './network/roomApi'
   import RaceView from './ui/RaceView.svelte'
   import RoomBrowser from './ui/RoomBrowser.svelte'
   import RoomLobby from './ui/RoomLobby.svelte'
-  import type { Player, Room } from './ui/roomTypes'
+  import type { Room, RoomSummary } from './ui/roomTypes'
 
   type Screen = 'menu' | 'rooms' | 'lobby' | 'race'
 
-  const PLAYER_ID = 'local-player'
   const randomBoatNames = ['Sea Biscuit', 'Windward', 'Blue Comet', 'Tidal Pixel', 'North Star']
   const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
 
   let screen: Screen = 'menu'
-  let rooms: Room[] = []
+  let rooms: RoomSummary[] = []
   let loadingRooms = false
   let roomsError = ''
   let currentRoom: Room | undefined
@@ -26,6 +25,8 @@
   let countdown = 0
   let ranking: RankingEntry[] = []
   let session: GameSession | undefined
+  let roomConnection: RoomConnection | undefined
+  let localServerPlayerId: string | undefined
   let countdownToken = 0
   let pendingStart = false
 
@@ -47,7 +48,11 @@
     loadingRooms = true
     roomsError = ''
     rooms = []
-    rooms = await fetchRooms()
+    try {
+      rooms = await fetchRooms()
+    } catch {
+      roomsError = 'Room server is unavailable. Start it with pnpm server.'
+    }
     loadingRooms = false
   }
 
@@ -56,7 +61,13 @@
     screen = 'rooms'
     loadingRooms = true
     roomsError = ''
-    rooms = await fetchRooms()
+    try {
+      rooms = await fetchRooms()
+    } catch {
+      roomsError = 'Room server is unavailable. Start it with pnpm server.'
+      loadingRooms = false
+      return
+    }
     const error = await joinRoom(roomId, password)
     if (error) {
       roomsError = error
@@ -64,19 +75,17 @@
     }
   }
 
-  async function fetchRooms(): Promise<Room[]> {
-    await delay(550)
-    return getMockRooms()
-  }
-
   async function joinRoom(roomId: string, password: string): Promise<string | undefined> {
-    const room = rooms.find((candidate) => candidate.id === roomId)
-    if (!room) return 'That mock room does not exist.'
     if (!password) return 'Enter the room password to join.'
-    await delay(350)
-    if (room.password !== password) return 'Incorrect password.'
-    const localPlayer: Player = { id: PLAYER_ID, name: boatName }
-    currentRoom = { ...room, players: [...room.players.filter((player) => player.id !== PLAYER_ID), localPlayer] }
+    try {
+      roomConnection?.socket.close()
+      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState)
+      roomConnection = connection
+      localServerPlayerId = connection.player.id
+      currentRoom = { ...connection.room, password }
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Could not join room.'
+    }
     gateDistance = currentRoom.gateDistance
     gatesToWin = currentRoom.gatesToWin
     updateRoomUrl(currentRoom)
@@ -85,31 +94,32 @@
     return undefined
   }
 
-  async function createRoom(name: string, password: string): Promise<void> {
-    await delay(350)
-    const room: Room = {
-      id: `room-${Math.random().toString(36).slice(2, 8)}`, name: name.trim(), password, status: 'waiting',
-      players: [{ id: PLAYER_ID, name: boatName, isAdmin: true }], gateDistance: 6_000, gatesToWin: 5,
+  async function createRoom(name: string, password: string): Promise<string | undefined> {
+    try {
+      roomConnection?.socket.close()
+      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState)
+      roomConnection = connection
+      localServerPlayerId = connection.player.id
+      currentRoom = { ...connection.room, password }
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Could not create room.'
     }
-    rooms = [room, ...rooms]
-    currentRoom = room
-    gateDistance = room.gateDistance
-    gatesToWin = room.gatesToWin
-    updateRoomUrl(room)
+    gateDistance = currentRoom.gateDistance
+    gatesToWin = currentRoom.gatesToWin
+    updateRoomUrl(currentRoom)
     screen = 'lobby'
-    window.setTimeout(() => {
-      if (currentRoom?.id === room.id) currentRoom = { ...currentRoom, players: [...currentRoom.players, { id: 'mock-sailor', name: 'Mock Sailor' }] }
-    }, 900)
+    return undefined
   }
 
   function updateBoatName(name: string): void {
     boatName = name.trim() || randomBoatNames[Math.floor(Math.random() * randomBoatNames.length)]
     localStorage.setItem('shift-game.boat-name', boatName)
-    if (currentRoom) currentRoom = { ...currentRoom, players: currentRoom.players.map((player) => player.id === PLAYER_ID ? { ...player, name: boatName } : player) }
+    roomConnection?.socket.send(JSON.stringify({ type: 'set-name', name: boatName }))
+    if (currentRoom) currentRoom = { ...currentRoom, players: currentRoom.players.map((player) => player.id === localServerPlayerId ? { ...player, name: boatName } : player) }
   }
 
   function localPlayerIsAdmin(): boolean {
-    return currentRoom?.players.some((player) => player.id === PLAYER_ID && player.isAdmin) ?? false
+    return currentRoom?.players.some((player) => player.id === localServerPlayerId && player.isAdmin) ?? false
   }
 
   function updateRaceSettings(distance: number, gates: number): void {
@@ -156,6 +166,16 @@
     ranking = []
   }
 
+  function applyServerRoomState(room: RoomSummary): void {
+    if (!currentRoom) return
+    currentRoom = {
+      ...room,
+      password: currentRoom.password,
+      gateDistance: currentRoom.gateDistance,
+      gatesToWin: currentRoom.gatesToWin,
+    }
+  }
+
   function updateRoomUrl(room: Room): void {
     const url = new URL(window.location.href)
     url.searchParams.set('roomId', room.id)
@@ -172,12 +192,9 @@
 
   function leaveLobby(): void {
     if (!currentRoom) return
-    const remainingPlayers = currentRoom.players.filter((player) => player.id !== PLAYER_ID)
-    if (remainingPlayers.length === 0) rooms = rooms.filter((room) => room.id !== currentRoom?.id)
-    else if (localPlayerIsAdmin()) {
-      const nextAdmin = remainingPlayers[Math.floor(Math.random() * remainingPlayers.length)]
-      currentRoom = { ...currentRoom, players: remainingPlayers.map((player) => ({ ...player, isAdmin: player.id === nextAdmin.id })) }
-    }
+    roomConnection?.socket.close()
+    roomConnection = undefined
+    localServerPlayerId = undefined
     currentRoom = undefined
     clearRoomUrl()
     screen = 'rooms'
