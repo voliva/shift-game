@@ -5,15 +5,20 @@ export class RemoteBoatDemo {
   private messageCount = 0
   private readonly source: Boat
   private readonly replica: RemoteBoat
+  private readonly timer: number
 
   constructor(source: Boat, replica: RemoteBoat) {
     this.source = source
     this.replica = replica
-    window.setInterval(() => this.sendState(), 200)
+    this.timer = window.setInterval(() => this.sendState(), 200)
   }
 
   update(deltaSeconds: number, windDirection: number): void {
     this.source.update(deltaSeconds, windDirection)
+  }
+
+  destroy(): void {
+    window.clearInterval(this.timer)
   }
 
   private sendState(): void {
