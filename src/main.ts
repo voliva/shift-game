@@ -11,6 +11,9 @@ const BOAT_SPEED = 120
 const MAX_TRAIL_POINTS = 1_200
 const TACK_DURATION_SECONDS = 0.5
 const UPWIND_SPEED = 0.8
+const DOOR_DISTANCE = 6_000
+const DOOR_WIDTH = 400
+const BEAM_SPEED_FACTOR = 1.5
 const WIND_TURN_SPEED = 25
 const SHIFT_INTENSITY = 45
 const MAX_DEVIATION = 45
@@ -27,6 +30,8 @@ let meanWindDirection = Math.random() * MAX_DEVIATION - MAX_DEVIATION / 2
 let deviationDirection = Math.random() < 0.5 ? -1 : 1
 let nextShiftAt = performance.now() + shiftDelay()
 let nextDeviationAt = performance.now() + 10_000
+let beaming = false
+let blockedDoorY = 0
 const boat: Point = { x: 0, y: 0 }
 const trail: Point[] = [{ ...boat }]
 
@@ -85,8 +90,33 @@ function update(deltaSeconds: number): void {
     (UPWIND_SPEED + (1 - UPWIND_SPEED) * 16 * heading * heading / Math.PI / Math.PI) /
     (Math.sqrt(2) * Math.cos(heading))
 
-  boat.x += Math.sin(course) * BOAT_SPEED * speedMultiplier * deltaSeconds
-  boat.y += Math.cos(course) * BOAT_SPEED * speedMultiplier * deltaSeconds
+  const movementX = Math.sin(course) * BOAT_SPEED * speedMultiplier * deltaSeconds
+  const movementY = Math.cos(course) * BOAT_SPEED * speedMultiplier * deltaSeconds
+
+  if (beaming) {
+    // Stage.java pins a missed boat to the door, then moves it sideways to the opening.
+    boat.y = blockedDoorY + 1
+    if (Math.abs(boat.x) < DOOR_WIDTH / 2) {
+      beaming = false
+      boat.x += movementX
+      boat.y += movementY
+    } else {
+      boat.x -= Math.sign(boat.x) * BOAT_SPEED * BEAM_SPEED_FACTOR * deltaSeconds
+    }
+  } else {
+    const nextDoorY = (Math.floor(boat.y / DOOR_DISTANCE) + 1) * DOOR_DISTANCE
+    const crossesDoor = movementY > 0 && boat.y < nextDoorY && boat.y + movementY >= nextDoorY
+
+    if (crossesDoor && Math.abs(boat.x) >= DOOR_WIDTH / 2) {
+      blockedDoorY = nextDoorY
+      beaming = true
+      boat.y = blockedDoorY + 1
+      boat.x -= Math.sign(boat.x) * BOAT_SPEED * BEAM_SPEED_FACTOR * deltaSeconds
+    } else {
+      boat.x += movementX
+      boat.y += movementY
+    }
+  }
 
   const previous = trail.at(-1)!
   if (Math.hypot(boat.x - previous.x, boat.y - previous.y) >= 2) {
@@ -118,7 +148,9 @@ function drawTrail(): void {
 }
 
 function drawBoat(): void {
-  const course = (windDirection * Math.PI) / 180 + heading
+  const course = beaming
+    ? -Math.sign(boat.x) * Math.PI / 2
+    : (windDirection * Math.PI) / 180 + heading
   context.save()
   context.translate(viewport.width / 2, viewport.height / 2)
   context.rotate(course)
@@ -146,17 +178,91 @@ function drawBoat(): void {
   context.restore()
 }
 
+function drawDoors(): void {
+  const currentDoorY = Math.floor(boat.y / DOOR_DISTANCE) * DOOR_DISTANCE
+  const doorY = beaming ? blockedDoorY : currentDoorY + DOOR_DISTANCE
+  const left = worldToScreen({ x: -DOOR_WIDTH / 2, y: doorY })
+  const right = worldToScreen({ x: DOOR_WIDTH / 2, y: doorY })
+
+  context.strokeStyle = beaming ? '#ff7f0a' : 'rgba(255, 127, 10, 0.55)'
+  context.lineWidth = 3
+  context.beginPath()
+  context.moveTo(left.x, left.y)
+  context.lineTo(right.x, right.y)
+  context.stroke()
+  context.fillStyle = context.strokeStyle
+  context.beginPath()
+  context.arc(left.x, left.y, 6, 0, Math.PI * 2)
+  context.arc(right.x, right.y, 6, 0, Math.PI * 2)
+  context.fill()
+}
+
+function drawCourseNavigator(): void {
+  const width = 164
+  const height = 214
+  const left = viewport.width - width - 18
+  const top = 18
+  const centerX = left + width / 2
+  const startY = top + height - 26
+  const finishY = top + 36
+  const middleY = (startY + finishY) / 2
+  const gateHalfWidth = 6
+  const tunnelHalfWidth = 65
+  // Stage keeps the boat numerically just beyond a missed gate while it beams sideways.
+  // Keep it on the completed segment in the navigator until it is actually released.
+  const segmentStartY = beaming
+    ? blockedDoorY - DOOR_DISTANCE
+    : Math.floor(boat.y / DOOR_DISTANCE) * DOOR_DISTANCE
+  const progress = Math.max(0, Math.min(1, (boat.y - segmentStartY) / DOOR_DISTANCE))
+  const boatY = startY + (finishY - startY) * progress
+  const boatX = centerX + Math.max(-tunnelHalfWidth, Math.min(tunnelHalfWidth, boat.x / 50))
+
+  context.fillStyle = 'rgba(255, 255, 255, 0.86)'
+  context.fillRect(left, top, width, height)
+  context.strokeStyle = 'rgba(4, 48, 78, 0.18)'
+  context.strokeRect(left, top, width, height)
+  context.fillStyle = '#063d63'
+  context.font = '600 12px system-ui, sans-serif'
+  context.fillText('COURSE', left + 12, top + 19)
+
+  context.strokeStyle = 'rgba(5, 61, 99, 0.42)'
+  context.lineWidth = 2
+  context.beginPath()
+  context.moveTo(centerX - gateHalfWidth, startY)
+  context.lineTo(centerX - tunnelHalfWidth, middleY)
+  context.lineTo(centerX - gateHalfWidth, finishY)
+  context.moveTo(centerX + gateHalfWidth, startY)
+  context.lineTo(centerX + tunnelHalfWidth, middleY)
+  context.lineTo(centerX + gateHalfWidth, finishY)
+  context.stroke()
+
+  context.strokeStyle = '#ff7f0a'
+  context.lineWidth = 3
+  context.beginPath()
+  context.moveTo(centerX - gateHalfWidth, startY)
+  context.lineTo(centerX + gateHalfWidth, startY)
+  context.moveTo(centerX - gateHalfWidth, finishY)
+  context.lineTo(centerX + gateHalfWidth, finishY)
+  context.stroke()
+
+  context.fillStyle = beaming ? '#ff7f0a' : '#54d981'
+  context.beginPath()
+  context.arc(boatX, boatY, 5, 0, Math.PI * 2)
+  context.fill()
+}
+
 function drawHud(): void {
   context.fillStyle = 'rgba(255, 255, 255, 0.86)'
-  context.fillRect(18, 18, 250, 68)
+  context.fillRect(18, 18, 250, 86)
   context.strokeStyle = 'rgba(4, 48, 78, 0.18)'
-  context.strokeRect(18, 18, 250, 68)
+  context.strokeRect(18, 18, 250, 86)
   context.fillStyle = '#063d63'
   context.font = '600 14px system-ui, sans-serif'
   context.fillText('Click or press Space to tack', 32, 40)
   context.font = '12px system-ui, sans-serif'
   context.fillText(`Current tack: ${tack}`, 32, 58)
   context.fillText(`Wind: ${windDirection.toFixed(0)} deg  |  W: force shift`, 32, 76)
+  context.fillText(beaming ? 'Missed gate: returning to opening' : 'Next gate: 400-unit opening', 32, 94)
 }
 
 function render(now: number): void {
@@ -167,8 +273,10 @@ function render(now: number): void {
   context.fillStyle = '#1295d8'
   context.fillRect(0, 0, viewport.width, viewport.height)
   drawTrail()
+  drawDoors()
   drawBoat()
   drawHud()
+  drawCourseNavigator()
   requestAnimationFrame(render)
 }
 
