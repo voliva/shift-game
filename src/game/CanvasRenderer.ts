@@ -1,6 +1,5 @@
 import { DOOR_DISTANCE, DOOR_WIDTH, LAYLINE_LENGTH } from './constants'
 import type { Boat } from './Boat'
-import { Race } from './Race'
 import type { Point } from './types'
 
 type Viewport = { width: number; height: number; pixelRatio: number }
@@ -23,21 +22,17 @@ export class CanvasRenderer {
     }
     this.canvas.width = Math.round(this.viewport.width * this.viewport.pixelRatio)
     this.canvas.height = Math.round(this.viewport.height * this.viewport.pixelRatio)
-    this.canvas.style.width = `${this.viewport.width}px`
-    this.canvas.style.height = `${this.viewport.height}px`
     this.context.setTransform(this.viewport.pixelRatio, 0, 0, this.viewport.pixelRatio, 0, 0)
   }
 
-  render(race: Race, camera: Boat): void {
+  render(boats: Boat[], camera: Boat, windDirection: number, meanWindDirection: number): void {
     this.context.clearRect(0, 0, this.viewport.width, this.viewport.height)
     this.context.fillStyle = '#1295d8'
     this.context.fillRect(0, 0, this.viewport.width, this.viewport.height)
-    this.drawLaylines(camera, race.wind.meanDirection)
-    this.drawTrails(race.boats, camera)
+    this.drawLaylines(camera, meanWindDirection)
+    this.drawTrails(boats, camera)
     this.drawDoors(camera)
-    for (const boat of race.boats) this.drawBoat(boat, camera, race.wind.direction)
-    this.drawHud(race, camera)
-    this.drawCourseNavigator(race.boats)
+    for (const boat of boats) this.drawBoat(boat, camera, windDirection)
   }
 
   private worldToScreen(point: Point, camera: Boat): Point {
@@ -136,71 +131,5 @@ export class CanvasRenderer {
     }
     this.context.stroke()
     this.context.setLineDash([])
-  }
-
-  private drawCourseNavigator(boats: Boat[]): void {
-    const width = 164
-    const height = 214
-    const left = this.viewport.width - width - 18
-    const top = 18
-    const centerX = left + width / 2
-    const startY = top + height - 26
-    const finishY = top + 36
-    const middleY = (startY + finishY) / 2
-    const mapScale = Math.min((width - 24) / (DOOR_DISTANCE + DOOR_WIDTH), (startY - finishY) / DOOR_DISTANCE)
-    const gateHalfWidth = (DOOR_WIDTH / 2) * mapScale
-    const tunnelHalfWidth = (DOOR_DISTANCE / 2 + DOOR_WIDTH / 2) * mapScale
-    this.context.save()
-    this.context.globalAlpha = 0.8
-    this.context.fillStyle = 'rgba(255, 255, 255, 0.86)'
-    this.context.fillRect(left, top, width, height)
-    this.context.strokeStyle = 'rgba(4, 48, 78, 0.18)'
-    this.context.strokeRect(left, top, width, height)
-    this.context.fillStyle = '#063d63'
-    this.context.font = '600 12px system-ui, sans-serif'
-    this.context.fillText('COURSE', left + 12, top + 19)
-    this.context.strokeStyle = 'rgba(5, 61, 99, 0.42)'
-    this.context.lineWidth = 2
-    this.context.beginPath()
-    this.context.moveTo(centerX - gateHalfWidth, startY)
-    this.context.lineTo(centerX - tunnelHalfWidth, middleY)
-    this.context.lineTo(centerX - gateHalfWidth, finishY)
-    this.context.moveTo(centerX + gateHalfWidth, startY)
-    this.context.lineTo(centerX + tunnelHalfWidth, middleY)
-    this.context.lineTo(centerX + gateHalfWidth, finishY)
-    this.context.stroke()
-    this.context.strokeStyle = '#ff7f0a'
-    this.context.lineWidth = 3
-    this.context.beginPath()
-    this.context.moveTo(centerX - gateHalfWidth, startY)
-    this.context.lineTo(centerX + gateHalfWidth, startY)
-    this.context.moveTo(centerX - gateHalfWidth, finishY)
-    this.context.lineTo(centerX + gateHalfWidth, finishY)
-    this.context.stroke()
-    for (const boat of boats) {
-      const segmentStartY = boat.courseSegmentStart()
-      const progress = Math.max(0, Math.min(1, (boat.position.y - segmentStartY) / DOOR_DISTANCE))
-      const boatY = startY + (finishY - startY) * progress
-      const boatX = centerX + Math.max(-tunnelHalfWidth, Math.min(tunnelHalfWidth, boat.position.x * mapScale))
-      this.context.fillStyle = boat.color
-      this.context.beginPath()
-      this.context.arc(boatX, boatY, 5, 0, Math.PI * 2)
-      this.context.fill()
-    }
-    this.context.restore()
-  }
-
-  private drawHud(race: Race, boat: Boat): void {
-    this.context.fillStyle = 'rgba(255, 255, 255, 0.86)'
-    this.context.fillRect(18, 18, 274, 104)
-    this.context.strokeStyle = 'rgba(4, 48, 78, 0.18)'
-    this.context.strokeRect(18, 18, 274, 104)
-    this.context.fillStyle = '#063d63'
-    this.context.font = '600 14px system-ui, sans-serif'
-    this.context.fillText('Player 1: click or Space to tack', 32, 40)
-    this.context.fillText('Player 2: T to tack', 32, 60)
-    this.context.font = '12px system-ui, sans-serif'
-    this.context.fillText(`P1 tack: ${boat.currentTack}  |  Wind: ${race.wind.direction.toFixed(0)} deg`, 32, 82)
-    this.context.fillText(boat.isBeaming ? 'Missed gate: returning to opening' : 'W: force wind shift', 32, 104)
   }
 }

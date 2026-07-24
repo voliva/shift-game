@@ -11,6 +11,7 @@ import type { Point, Tack } from './types'
 
 export type BoatOptions = {
   id: string
+  name: string
   color: string
   outlineColor: string
   start: Point
@@ -19,6 +20,7 @@ export type BoatOptions = {
 
 export class Boat {
   readonly id: string
+  readonly name: string
   readonly color: string
   readonly outlineColor: string
   readonly position: Point
@@ -32,6 +34,7 @@ export class Boat {
 
   constructor(options: BoatOptions) {
     this.id = options.id
+    this.name = options.name
     this.color = options.color
     this.outlineColor = options.outlineColor
     this.position = { ...options.start }
@@ -59,13 +62,16 @@ export class Boat {
     const speedMultiplier =
       (UPWIND_SPEED + (1 - UPWIND_SPEED) * 16 * this.heading * this.heading / Math.PI / Math.PI) /
       (Math.sqrt(2) * Math.cos(this.heading))
-    const movementX = Math.sin(course) * BOAT_SPEED * speedMultiplier * deltaSeconds
-    const movementY = Math.cos(course) * BOAT_SPEED * speedMultiplier * deltaSeconds
+    const predictedMovement = {
+      x: Math.sin(course) * BOAT_SPEED * speedMultiplier * deltaSeconds,
+      y: Math.cos(course) * BOAT_SPEED * speedMultiplier * deltaSeconds,
+    }
+    const movement = this.adjustMovement(predictedMovement)
 
     if (this.isBeaming) {
-      this.updateBeam(movementX, movementY, deltaSeconds)
+      this.updateBeam(movement.x, movement.y, deltaSeconds)
     } else {
-      this.updateSailing(movementX, movementY, deltaSeconds)
+      this.updateSailing(movement.x, movement.y, deltaSeconds)
     }
     this.recordTrailPoint()
   }
@@ -79,6 +85,10 @@ export class Boat {
     return this.isBeaming
       ? this.blockedDoorY - DOOR_DISTANCE
       : Math.floor(this.position.y / DOOR_DISTANCE) * DOOR_DISTANCE
+  }
+
+  protected adjustMovement(movement: Point): Point {
+    return movement
   }
 
   private updateHeading(deltaSeconds: number): void {

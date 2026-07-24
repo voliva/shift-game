@@ -16,8 +16,59 @@ body {
   overflow: hidden;
 }
 
+#app {
+  position: relative;
+}
+
 #game {
   display: block;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+#minimap,
+#hud {
+  position: absolute;
+  top: 18px;
+}
+
+#minimap {
+  right: 18px;
+  width: 164px;
+  height: 214px;
+  pointer-events: none;
+}
+
+#hud {
+  left: 18px;
+  min-width: 250px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  color: #063d63;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(4, 48, 78, 0.18);
+  font-size: 12px;
+}
+
+#hud h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.ranking-row {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 24px;
+}
+
+.ranking-marker {
+  width: 8px;
+  height: 8px;
+}
+
+.ranking-gap {
+  color: rgba(6, 61, 99, 0.7);
 }
