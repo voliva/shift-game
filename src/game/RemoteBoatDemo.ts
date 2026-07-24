@@ -18,7 +18,6 @@ export class RemoteBoatDemo {
 
   private sendState(): void {
     this.messageCount += 1
-    if (Math.random() < 0.05) this.source.tack()
     this.replica.updateState({
       x: this.source.position.x + Math.random() * 20 - 10,
       y: this.source.position.y + Math.random() * 20 - 10,

@@ -5,6 +5,7 @@ import { MinimapRenderer } from './game/MinimapRenderer'
 import { Race } from './game/Race'
 import { RemoteBoat } from './game/RemoteBoat'
 import { RemoteBoatDemo } from './game/RemoteBoatDemo'
+import { SimpleAiController } from './game/SimpleAiController'
 import { RankingHud } from './ui/RankingHud'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')
@@ -36,6 +37,16 @@ const playerTwo = new RemoteBoat({
 })
 race.addBoat(playerOne)
 race.addBoat(playerTwo)
+const aiBoat = new Boat({
+  id: 'ai-boat',
+  name: 'Navigator AI',
+  color: '#f5b84b',
+  outlineColor: '#8a4b08',
+  start: { x: 0, y: -120 },
+  tack: 'starboard',
+})
+race.addBoat(aiBoat)
+const aiController = new SimpleAiController(aiBoat)
 const remoteSource = new Boat({
   id: 'demo-remote-source',
   name: 'Remote Demo Source',
@@ -44,6 +55,7 @@ const remoteSource = new Boat({
   start: { x: 70, y: 0 },
   tack: 'port',
 })
+const aiController2 = new SimpleAiController(remoteSource)
 const remoteBoatDemo = new RemoteBoatDemo(remoteSource, playerTwo)
 const renderer = new CanvasRenderer(canvas, context)
 const minimapRenderer = new MinimapRenderer(minimapCanvas, minimapContext)
@@ -55,6 +67,8 @@ function render(now: number): void {
   lastTime = now
   race.updateWind(now, deltaSeconds)
   remoteBoatDemo.update(deltaSeconds, race.wind.direction)
+  aiController.update(now, race.wind.direction, race.wind.meanDirection)
+  aiController2.update(now, race.wind.direction, race.wind.meanDirection)
   for (const boat of race.boats) boat.update(deltaSeconds, race.wind.direction)
   renderer.render(race.boats, playerOne, race.wind.direction, race.wind.meanDirection)
   minimapRenderer.render(race.boats)
