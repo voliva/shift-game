@@ -37,6 +37,7 @@ export class GameSession {
   private lastTime = performance.now()
   private lastRankingUpdate = 0
   private animationFrame = 0
+  private paused = false
 
   constructor(
     gameCanvas: HTMLCanvasElement,
@@ -56,7 +57,8 @@ export class GameSession {
     this.remoteBoatDemo = new RemoteBoatDemo(this.remoteSource, this.playerTwo)
   }
 
-  start(): void {
+  start(paused = false): void {
+    this.paused = paused
     this.resize()
     window.addEventListener('resize', this.resize)
     window.addEventListener('keydown', this.handleKeydown)
@@ -71,17 +73,25 @@ export class GameSession {
   }
 
   tackPlayer(): void {
+    if (this.paused) return
     this.playerOne.tack()
+  }
+
+  resume(): void {
+    this.paused = false
+    this.lastTime = performance.now()
   }
 
   private frame = (now: number): void => {
     const deltaSeconds = Math.min((now - this.lastTime) / 1_000, 0.05)
     this.lastTime = now
-    this.race.updateWind(now, deltaSeconds)
-    this.remoteBoatDemo.update(deltaSeconds, this.race.wind.direction)
-    this.aiController.update(now, this.race.wind.direction, this.race.wind.meanDirection)
-    this.remoteAiController.update(now, this.race.wind.direction, this.race.wind.meanDirection)
-    for (const boat of this.race.boats) boat.update(deltaSeconds, this.race.wind.direction)
+    if (!this.paused) {
+      this.race.updateWind(now, deltaSeconds)
+      this.remoteBoatDemo.update(deltaSeconds, this.race.wind.direction)
+      this.aiController.update(now, this.race.wind.direction, this.race.wind.meanDirection)
+      this.remoteAiController.update(now, this.race.wind.direction, this.race.wind.meanDirection)
+      for (const boat of this.race.boats) boat.update(deltaSeconds, this.race.wind.direction)
+    }
 
     this.fieldRenderer.render(this.race.boats, this.playerOne, this.race.wind.direction, this.race.wind.meanDirection)
     this.minimapRenderer.render(this.race.boats)
@@ -95,7 +105,7 @@ export class GameSession {
   }
 
   private handleKeydown = (event: KeyboardEvent): void => {
-    if (event.repeat) return
+    if (this.paused || event.repeat) return
     if (event.code === 'Space') {
       event.preventDefault()
       this.tackPlayer()
