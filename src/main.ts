@@ -7,15 +7,20 @@ if (!canvas || !context) throw new Error('Canvas 2D is not available')
 
 type Point = { x: number; y: number }
 
-const BOAT_SPEED = 120 // world units per second, matching the original 2 pixels/frame at 60 fps
+const BOAT_SPEED = 120
 const MAX_TRAIL_POINTS = 1_200
-const WIND_TURN_SPEED = 25 // degrees/second: original Stage eases by 0.5 degrees every 20ms
+const TACK_DURATION_SECONDS = 0.5
+const UPWIND_SPEED = 0.8
+const WIND_TURN_SPEED = 25
 const SHIFT_INTENSITY = 45
 const MAX_DEVIATION = 45
 
 let viewport = { width: window.innerWidth, height: window.innerHeight, pixelRatio: 1 }
 let lastTime = performance.now()
 let tack: 'port' | 'starboard' = 'starboard'
+let heading = -Math.PI / 4
+let tackStartHeading = heading
+let tackElapsed = TACK_DURATION_SECONDS
 let windDirection = 0
 let targetWindDirection = 0
 let meanWindDirection = Math.random() * MAX_DEVIATION - MAX_DEVIATION / 2
@@ -31,7 +36,6 @@ function resize(): void {
     height: window.innerHeight,
     pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
   }
-
   canvas.width = Math.round(viewport.width * viewport.pixelRatio)
   canvas.height = Math.round(viewport.height * viewport.pixelRatio)
   canvas.style.width = `${viewport.width}px`
@@ -41,6 +45,8 @@ function resize(): void {
 
 function switchTack(): void {
   tack = tack === 'starboard' ? 'port' : 'starboard'
+  tackStartHeading = heading
+  tackElapsed = 0
 }
 
 function shiftDelay(): number {
@@ -48,7 +54,7 @@ function shiftDelay(): number {
 }
 
 function makeWindShift(): void {
-  // This mirrors ServerStage: a random ±22.5° shift around a slowly drifting mean.
+  // Original ServerStage chooses a random shift around a slowly drifting mean.
   targetWindDirection = meanWindDirection + Math.random() * SHIFT_INTENSITY - SHIFT_INTENSITY / 2
   nextShiftAt = performance.now() + shiftDelay()
 }
@@ -63,14 +69,24 @@ function update(deltaSeconds: number): void {
   }
 
   const remainingTurn = targetWindDirection - windDirection
-  const turn = Math.sign(remainingTurn) * Math.min(Math.abs(remainingTurn), WIND_TURN_SPEED * deltaSeconds)
-  windDirection += turn
+  windDirection += Math.sign(remainingTurn) * Math.min(Math.abs(remainingTurn), WIND_TURN_SPEED * deltaSeconds)
 
-  const courseDegrees = windDirection + (tack === 'port' ? 45 : -45)
-  const course = (courseDegrees * Math.PI) / 180
+  const targetHeading = tack === 'port' ? Math.PI / 4 : -Math.PI / 4
+  if (tackElapsed < TACK_DURATION_SECONDS) {
+    tackElapsed = Math.min(tackElapsed + deltaSeconds, TACK_DURATION_SECONDS)
+    const progress = tackElapsed / TACK_DURATION_SECONDS
+    heading = tackStartHeading + (targetHeading - tackStartHeading) * progress
+  } else {
+    heading = targetHeading
+  }
 
-  boat.x += Math.sin(course) * BOAT_SPEED * deltaSeconds
-  boat.y += Math.cos(course) * BOAT_SPEED * deltaSeconds
+  const course = (windDirection * Math.PI) / 180 + heading
+  const speedMultiplier =
+    (UPWIND_SPEED + (1 - UPWIND_SPEED) * 16 * heading * heading / Math.PI / Math.PI) /
+    (Math.sqrt(2) * Math.cos(heading))
+
+  boat.x += Math.sin(course) * BOAT_SPEED * speedMultiplier * deltaSeconds
+  boat.y += Math.cos(course) * BOAT_SPEED * speedMultiplier * deltaSeconds
 
   const previous = trail.at(-1)!
   if (Math.hypot(boat.x - previous.x, boat.y - previous.y) >= 2) {
@@ -88,7 +104,6 @@ function worldToScreen(point: Point): Point {
 
 function drawTrail(): void {
   if (trail.length < 2) return
-
   context.beginPath()
   trail.forEach((point, index) => {
     const screen = worldToScreen(point)
@@ -103,15 +118,11 @@ function drawTrail(): void {
 }
 
 function drawBoat(): void {
-  const centerX = viewport.width / 2
-  const centerY = viewport.height / 2
-  const courseDegrees = windDirection + (tack === 'port' ? 45 : -45)
-
+  const course = (windDirection * Math.PI) / 180 + heading
   context.save()
-  context.translate(centerX, centerY)
-  context.rotate((courseDegrees * Math.PI) / 180)
+  context.translate(viewport.width / 2, viewport.height / 2)
+  context.rotate(course)
 
-  // A compact sailboat, pointed in its direction of travel.
   context.beginPath()
   context.moveTo(0, -25)
   context.lineTo(11, 18)
@@ -132,7 +143,6 @@ function drawBoat(): void {
   context.fillStyle = '#f4fff7'
   context.fill()
   context.stroke()
-
   context.restore()
 }
 
@@ -146,21 +156,19 @@ function drawHud(): void {
   context.fillText('Click or press Space to tack', 32, 40)
   context.font = '12px system-ui, sans-serif'
   context.fillText(`Current tack: ${tack}`, 32, 58)
-  context.fillText(`Wind: ${windDirection.toFixed(0)}°  ·  W: force shift`, 32, 76)
+  context.fillText(`Wind: ${windDirection.toFixed(0)} deg  |  W: force shift`, 32, 76)
 }
 
 function render(now: number): void {
   const deltaSeconds = Math.min((now - lastTime) / 1_000, 0.05)
   lastTime = now
   update(deltaSeconds)
-
   context.clearRect(0, 0, viewport.width, viewport.height)
   context.fillStyle = '#1295d8'
   context.fillRect(0, 0, viewport.width, viewport.height)
   drawTrail()
   drawBoat()
   drawHud()
-
   requestAnimationFrame(render)
 }
 
