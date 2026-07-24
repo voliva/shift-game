@@ -11,9 +11,10 @@ const BOAT_SPEED = 120
 const MAX_TRAIL_POINTS = 1_200
 const TACK_DURATION_SECONDS = 0.5
 const UPWIND_SPEED = 0.8
-const DOOR_DISTANCE = 6_000
+const DOOR_DISTANCE = 1_000
 const DOOR_WIDTH = 400
 const BEAM_SPEED_FACTOR = 1.5
+const LAYLINE_LENGTH = 12_000
 const WIND_TURN_SPEED = 25
 const SHIFT_INTENSITY = 45
 const MAX_DEVIATION = 45
@@ -197,6 +198,32 @@ function drawDoors(): void {
   context.fill()
 }
 
+function drawLaylines(): void {
+  const currentDoorY = Math.floor(boat.y / DOOR_DISTANCE) * DOOR_DISTANCE
+  const gateY = beaming ? blockedDoorY : currentDoorY + DOOR_DISTANCE
+  const windRadians = (meanWindDirection * Math.PI) / 180
+  const laylines = [
+    { x: -DOOR_WIDTH / 2, inboundHeading: windRadians + Math.PI / 4 },
+    { x: DOOR_WIDTH / 2, inboundHeading: windRadians - Math.PI / 4 },
+  ]
+
+  context.strokeStyle = 'rgba(220, 45, 45, 0.65)'
+  context.lineWidth = 2
+  context.setLineDash([8, 8])
+  context.beginPath()
+  for (const { x, inboundHeading } of laylines) {
+    const start = worldToScreen({ x, y: gateY })
+    const end = worldToScreen({
+      x: x - Math.sin(inboundHeading) * LAYLINE_LENGTH,
+      y: gateY - Math.cos(inboundHeading) * LAYLINE_LENGTH,
+    })
+    context.moveTo(start.x, start.y)
+    context.lineTo(end.x, end.y)
+  }
+  context.stroke()
+  context.setLineDash([])
+}
+
 function drawCourseNavigator(): void {
   const width = 164
   const height = 214
@@ -217,6 +244,8 @@ function drawCourseNavigator(): void {
   const boatY = startY + (finishY - startY) * progress
   const boatX = centerX + Math.max(-tunnelHalfWidth, Math.min(tunnelHalfWidth, boat.x / 50))
 
+  context.save()
+  context.globalAlpha = 0.8
   context.fillStyle = 'rgba(255, 255, 255, 0.86)'
   context.fillRect(left, top, width, height)
   context.strokeStyle = 'rgba(4, 48, 78, 0.18)'
@@ -249,6 +278,7 @@ function drawCourseNavigator(): void {
   context.beginPath()
   context.arc(boatX, boatY, 5, 0, Math.PI * 2)
   context.fill()
+  context.restore()
 }
 
 function drawHud(): void {
@@ -272,6 +302,7 @@ function render(now: number): void {
   context.clearRect(0, 0, viewport.width, viewport.height)
   context.fillStyle = '#1295d8'
   context.fillRect(0, 0, viewport.width, viewport.height)
+  drawLaylines()
   drawTrail()
   drawDoors()
   drawBoat()
