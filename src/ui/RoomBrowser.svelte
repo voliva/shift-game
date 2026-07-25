@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RoomSummary } from './roomTypes'
+  import { GATE_DISTANCE_MULTIPLIER } from '../game/constants'
 
   export let rooms: RoomSummary[]
   export let loading: boolean
@@ -57,7 +58,7 @@
         <button class="room-card" onclick={() => selectRoom(room)}>
           <span>
             <strong>{room.name}</strong>
-            <small>{room.players.length} sailors · {room.gateDistance} gate distance</small>
+            <small>{room.players.length} sailors · {Math.round(room.gateDistance / GATE_DISTANCE_MULTIPLIER)} seconds to gate</small>
           </span>
           <em class:ongoing={room.status === 'ongoing'}>{room.status}</em>
         </button>

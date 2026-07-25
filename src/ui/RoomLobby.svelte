@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Room } from './roomTypes'
+  import { GATE_DISTANCE_MULTIPLIER } from '../game/constants'
 
   export let room: Room
   export let boatName: string
@@ -10,7 +11,7 @@
   export let onStart: () => void
 
   let editedBoatName = boatName
-  let gateDistance = room.gateDistance
+  let gateDistance = room.gateDistance / GATE_DISTANCE_MULTIPLIER
   let gatesToWin = room.gatesToWin
 
   function saveName(): void {
@@ -50,7 +51,7 @@
       <h2>Race settings</h2>
       {#if isAdmin}
         <label class="field-label">Gate distance
-          <input type="number" min="500" step="500" bind:value={gateDistance} onblur={saveSettings} />
+          <input type="number" min="1" step="1" bind:value={gateDistance} onblur={saveSettings} />
         </label>
         <label class="field-label">Gates to win
           <input type="number" min="1" step="1" bind:value={gatesToWin} onblur={saveSettings} />
@@ -59,7 +60,7 @@
           {room.players.length < 2 ? 'Need one more sailor' : 'Start race'}
         </button>
       {:else}
-        <p>{room.gateDistance} distance · first to {room.gatesToWin} gates wins</p>
+        <p>{Math.round(room.gateDistance / GATE_DISTANCE_MULTIPLIER)} seconds · first to {room.gatesToWin} gates wins</p>
         <p class="hint">Waiting for the host to start the race.</p>
       {/if}
     </section>

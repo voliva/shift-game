@@ -10,6 +10,7 @@
   import RoomBrowser from './ui/RoomBrowser.svelte'
   import RoomLobby from './ui/RoomLobby.svelte'
   import type { Room, RoomSummary } from './ui/roomTypes'
+  import { GATE_DISTANCE_MULTIPLIER } from './game/constants'
 
   type Screen = 'menu' | 'rooms' | 'lobby' | 'race'
   type FinishEntry = { id: string; name: string; color: string; rank: number }
@@ -136,7 +137,7 @@
     localServerPlayerId = connection.player.id
     currentRoom = { ...connection.room, password }
     updateFinishResults()
-    gateDistance = currentRoom.gateDistance
+    gateDistance = currentRoom.gateDistance / GATE_DISTANCE_MULTIPLIER
     gatesToWin = currentRoom.gatesToWin
     updateRoomUrl(currentRoom)
     loadingRooms = false
@@ -160,12 +161,13 @@
 
   function updateRaceSettings(distance: number, gates: number): void {
     if (!currentRoom || !localPlayerIsAdmin()) return
-    gateDistance = Math.max(500, distance)
+    gateDistance = Math.max(1, distance)
     gatesToWin = Math.max(1, gates)
     localStorage.setItem('shift-game.gate-distance', String(gateDistance))
     localStorage.setItem('shift-game.gates-to-win', String(gatesToWin))
-    currentRoom = { ...currentRoom, gateDistance, gatesToWin }
-    roomConnection?.socket.send(JSON.stringify({ type: 'race-settings', gateDistance, gatesToWin }))
+    const pixelDistance = Math.round(gateDistance * GATE_DISTANCE_MULTIPLIER)
+    currentRoom = { ...currentRoom, gateDistance: pixelDistance, gatesToWin }
+    roomConnection?.socket.send(JSON.stringify({ type: 'race-settings', gateDistance: pixelDistance, gatesToWin }))
   }
 
   function startOnlineRace(): void {
@@ -229,7 +231,13 @@
       players: currentRoom.players,
       onLocalBoatState: broadcastLocalBoatState,
     } : undefined
-    const course = currentRoom ? { gateDistance: currentRoom.gateDistance, gatesToWin: currentRoom.gatesToWin } : { gateDistance, gatesToWin }
+    const course = currentRoom ? {
+      gateDistance: currentRoom.gateDistance,
+      gatesToWin: currentRoom.gatesToWin
+    } : {
+      gateDistance: 60 * GATE_DISTANCE_MULTIPLIER,
+      gatesToWin: Number.POSITIVE_INFINITY
+    }
     session = new GameSession(gameCanvas, minimapCanvas, course, onlineRace)
     if (onlineWindConditions) session.race.setWindConditions(onlineWindConditions)
     for (const [playerId, state] of remoteBoatStates) session.updateRemoteBoat(playerId, state)
@@ -267,7 +275,7 @@
       ...room,
       password: currentRoom.password,
     }
-    gateDistance = room.gateDistance
+    gateDistance = room.gateDistance / GATE_DISTANCE_MULTIPLIER
     gatesToWin = room.gatesToWin
     updateFinishResults()
     // session?.syncOnlinePlayers(room.players.map((player) => ({

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { RankingEntry } from '../game/GameSession'
+  import { GATE_DISTANCE_MULTIPLIER } from '../game/constants'
 
   export let ranking: RankingEntry[]
   export let countdown: number
@@ -27,7 +28,7 @@
         <div class="ranking-row">
           <span class="ranking-marker" style:background-color={boat.color}></span>
           <span>{boat.rank}. {boat.name}</span>
-          <span class="ranking-gap">{boat.rank === 1 ? 'Leader' : `${Math.round(boat.gap)} behind`}</span>
+          <span class="ranking-gap">{boat.rank === 1 ? 'Leader' : `${Math.round(boat.gap / GATE_DISTANCE_MULTIPLIER)}s behind`}</span>
         </div>
       {/each}
     </div>

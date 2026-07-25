@@ -62,6 +62,7 @@ const SHIFT_INTENSITY = 45
 const MAX_DEVIATION = 45
 const BOAT_COLORS = ['#54d981', '#a78bfa', '#f5b84b', '#fb7185', '#38bdf8', '#f97316', '#e879f9', '#2dd4bf']
 const LATE_JOIN_DISTANCE = 200
+const GATE_DISTANCE_MULTIPLIER = 120 * Math.cos(Math.PI / 4)
 
 setInterval(() => {
   const now = Date.now()
@@ -124,7 +125,7 @@ function createRoom(name: string, password: string): Room {
     name,
     password,
     status: 'waiting',
-    gateDistance: 60,
+    gateDistance: 60 * GATE_DISTANCE_MULTIPLIER,
     gatesToWin: 3,
     wind: createWind(now),
     players: new Map(),
@@ -232,7 +233,7 @@ function updateRaceSettings(
   settings: { gateDistance: number; gatesToWin: number },
 ): void {
   if (!player.isAdmin || room.status !== 'waiting') return
-  room.gateDistance = Math.max(500, Math.round(settings.gateDistance))
+  room.gateDistance = Math.max(GATE_DISTANCE_MULTIPLIER, Math.round(settings.gateDistance))
   room.gatesToWin = Math.max(1, Math.round(settings.gatesToWin))
   broadcastRoomState(room)
 }
