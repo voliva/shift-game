@@ -11,22 +11,31 @@ export class SimpleAiBoat extends Boat {
   private wasOutsideLayline = false
 
   override update(deltaSeconds: number, now: number): void {
-    super.update(deltaSeconds, now);
-    if (!this.race) return;
-
-    const laylineTack = this.crossedLayline(this.race.wind.meanDirection)
-    if (laylineTack) {
-      this.setTack(laylineTack)
-      this.holdUntil = now + this.laylineHoldDuration(laylineTack, this.race.wind.direction)
+    if (!this.race) {
+      super.update(deltaSeconds, now)
       return
     }
-    if (now < this.holdUntil) return
 
-    if (this.race.wind.direction > WIND_TACK_THRESHOLD) this.setTack('starboard')
-    if (this.race.wind.direction < -WIND_TACK_THRESHOLD) this.setTack('port')
+    const laylineTack = this.tackToReachGateFromOutsideLayline(this.race.wind.meanDirection)
+    const isHorizontallyAtGate = Math.abs(this.position?.x ?? 0) <= DOOR_WIDTH / 2
+    if (laylineTack && !isHorizontallyAtGate) {
+      this.setTack(laylineTack)
+      if (!this.wasOutsideLayline) {
+        this.holdUntil = now + this.laylineHoldDuration(laylineTack, this.race.wind.direction)
+      }
+      this.wasOutsideLayline = true
+    } else {
+      this.wasOutsideLayline = false
+      if (isHorizontallyAtGate) this.holdUntil = 0
+      if (now >= this.holdUntil) {
+        if (this.race.wind.direction > WIND_TACK_THRESHOLD) this.setTack('starboard')
+        if (this.race.wind.direction < -WIND_TACK_THRESHOLD) this.setTack('port')
+      }
+    }
+    super.update(deltaSeconds, now)
   }
 
-  private crossedLayline(meanWindDirection: number): Tack | undefined {
+  private tackToReachGateFromOutsideLayline(meanWindDirection: number): Tack | undefined {
     if (!this.position || !this.race) return;
 
     const nextGateY = (Math.floor(this.position.y / this.race.gateDistance) + 1) * this.race.gateDistance
@@ -44,12 +53,10 @@ export class SimpleAiBoat extends Boat {
     const rightLaylineX = DOOR_WIDTH / 2 - Math.tan(starboardHeading) * distanceToGate
     const outsideLayline = this.position.x <= leftLaylineX || this.position.x >= rightLaylineX
 
-    if (!outsideLayline || this.wasOutsideLayline) {
-      this.wasOutsideLayline = outsideLayline
-      return undefined
-    }
+    if (!outsideLayline) return undefined
 
-    this.wasOutsideLayline = true
+    // Outside the left layline, only port tack brings the boat back right toward
+    // the gate; outside the right layline, only starboard tack brings it back left.
     return this.position.x <= leftLaylineX ? 'port' : 'starboard'
   }
 

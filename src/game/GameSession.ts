@@ -147,7 +147,7 @@ export class GameSession {
     }
 
     this.fieldRenderer.render(this.race.boats, this.localPlayer, this.race)
-    this.minimapRenderer.render(this.race.boats, this.race)
+    this.minimapRenderer.render(this.race.boats, this.localPlayer, this.race, messages[get(language)].course)
     this.animationFrame = requestAnimationFrame(this.frame)
   }
 

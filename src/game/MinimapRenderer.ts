@@ -23,7 +23,7 @@ export class MinimapRenderer {
     this.context.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0)
   }
 
-  render(boats: Boat[], race: Race): void {
+  render(boats: Boat[], localBoat: Boat, race: Race, title: string): void {
     this.context.clearRect(0, 0, this.width, this.height)
     const centerX = this.width / 2
     const startY = this.height - 26
@@ -41,7 +41,7 @@ export class MinimapRenderer {
     this.context.strokeRect(0, 0, this.width, this.height)
     this.context.fillStyle = '#063d63'
     this.context.font = '600 12px system-ui, sans-serif'
-    this.context.fillText('COURSE', 12, 19)
+    this.context.fillText(title, 12, 19)
     this.context.strokeStyle = 'rgba(5, 61, 99, 0.42)'
     this.context.lineWidth = 2
     this.context.beginPath()
@@ -60,8 +60,10 @@ export class MinimapRenderer {
     this.context.moveTo(centerX - gateHalfWidth, finishY)
     this.context.lineTo(centerX + gateHalfWidth, finishY)
     this.context.stroke()
+    const localGate = this.gateIndex(localBoat, race)
     for (const boat of boats) {
       if (!boat.position) continue;
+      if (boat !== localBoat && this.gateIndex(boat, race) !== localGate) continue
 
       const lapY = boat.position.y % race.gateDistance;
       const progress = lapY === 0 ? 1 : Math.max(0, Math.min(1, lapY / race.gateDistance));
@@ -73,5 +75,11 @@ export class MinimapRenderer {
       this.context.fill()
     }
     this.context.restore()
+  }
+
+  private gateIndex(boat: Boat, race: Race): number {
+    if (!boat.position) return 0
+    const gate = Math.floor(boat.position.y / race.gateDistance)
+    return boat.isBeaming() ? gate - 1 : gate
   }
 }
