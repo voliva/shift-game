@@ -52,6 +52,12 @@
   </header>
   {#if loading}
     <p class="loading">Looking for rooms...</p>
+  {:else if externalError}
+    <section class="online-unavailable" aria-live="polite">
+      <h2>Online play is unavailable</h2>
+      <p>{externalError}</p>
+      <button class="secondary" onclick={onRefresh}>Try again</button>
+    </section>
   {:else}
     <div class="room-list">
       {#each rooms as room (room.id)}
@@ -70,7 +76,6 @@
       <input aria-label="New room password" name="room-password" autocomplete="off" type="text" placeholder="Password" bind:value={newRoomPassword} />
       <button class="secondary" disabled={creatingRoom}>{creatingRoom ? 'Creating...' : 'Create room'}</button>
     </form>
-    {#if externalError}<p class="form-error">{externalError}</p>{/if}
     {#if passwordPromptRoom}
       <div class="dialog-backdrop" role="presentation">
         <form class="password-dialog" autocomplete="off" onsubmit={submitJoin}>

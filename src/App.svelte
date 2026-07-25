@@ -75,7 +75,7 @@
     try {
       rooms = await fetchRooms()
     } catch {
-      roomsError = 'Room server is unavailable. Start it with pnpm server.'
+      roomsError = 'Online play is unavailable right now. Please try again later.'
     }
     loadingRooms = false
   }
@@ -88,7 +88,7 @@
     try {
       rooms = await fetchRooms()
     } catch {
-      roomsError = 'Room server is unavailable. Start it with pnpm server.'
+      roomsError = 'Online play is unavailable right now. Please try again later.'
       loadingRooms = false
       return
     }

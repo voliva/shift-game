@@ -19,7 +19,7 @@
 </script>
 
 <main class="race-shell">
-  <canvas bind:this={gameCanvas} class="game-canvas" aria-label="Shift Game" onpointerdown={onTack}></canvas>
+  <canvas bind:this={gameCanvas} class="game-canvas" aria-label="Shift Game" onpointerdown={(event) => { event.preventDefault(); onTack() }}></canvas>
   <canvas bind:this={minimapCanvas} class="minimap" aria-label="Course minimap"></canvas>
   <aside class="hud" aria-label="Race ranking">
     <h2>Ranking</h2>
