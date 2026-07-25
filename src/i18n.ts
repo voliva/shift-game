@@ -185,3 +185,8 @@ export function finishPosition(locale: Language, rank: number): string {
     return `${rank}${rank === 1 ? "st" : rank === 2 ? "nd" : rank === 3 ? "rd" : "th"}`;
   return `${rank}.ª`;
 }
+
+export function optionalLabel(locale: Language): string {
+  if (locale === "es" || locale === "ca") return "(opcional)";
+  return "(optional)";
+}

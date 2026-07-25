@@ -13,6 +13,7 @@ export type Player = {
 export type RoomSummary = {
   id: string
   name: string
+  hasPassword: boolean
   status: 'waiting' | 'ongoing'
   players: Player[]
   finishedPlayers: { id: string; name: string; color: string; rank: number }[]

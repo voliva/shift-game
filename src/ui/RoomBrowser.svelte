@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { RoomSummary } from './roomTypes'
   import { GATE_DISTANCE_MULTIPLIER } from '../game/constants'
-  import { language, messages } from '../i18n'
+  import { language, messages, optionalLabel } from '../i18n'
 
   export let rooms: RoomSummary[]
   export let loading: boolean
@@ -17,8 +17,14 @@
   let newRoomName = ''
   let newRoomPassword = ''
   let creatingRoom = false
+  let joinError = ''
 
-  function selectRoom(room: RoomSummary): void {
+  async function selectRoom(room: RoomSummary): Promise<void> {
+    joinError = ''
+    if (!room.hasPassword) {
+      joinError = (await onJoin(room.id, '')) ?? ''
+      return
+    }
     passwordPromptRoom = room
     roomPassword = ''
     roomError = ''
@@ -33,7 +39,7 @@
 
   async function createRoom(event: SubmitEvent): Promise<void> {
     event.preventDefault()
-    if (!newRoomName.trim() || !newRoomPassword) return
+    if (!newRoomName.trim()) return
     creatingRoom = true
     roomError = (await onCreate(newRoomName, newRoomPassword)) ?? ''
     creatingRoom = false
@@ -71,10 +77,11 @@
         </button>
       {/each}
     </div>
+    {#if joinError}<p class="form-error">{joinError}</p>{/if}
     <form class="create-room" autocomplete="off" onsubmit={createRoom}>
       <h2>{messages[$language].createRoom}</h2>
       <input aria-label={messages[$language].roomName} name="room-name" autocomplete="off" placeholder={messages[$language].roomName} bind:value={newRoomName} />
-      <input aria-label={messages[$language].password} name="room-password" autocomplete="off" type="text" placeholder={messages[$language].password} bind:value={newRoomPassword} />
+      <input aria-label={`${messages[$language].password} ${optionalLabel($language)}`} name="room-password" autocomplete="off" type="text" placeholder={`${messages[$language].password} ${optionalLabel($language)}`} bind:value={newRoomPassword} />
       <button class="secondary" disabled={creatingRoom}>{creatingRoom ? messages[$language].creating : messages[$language].create}</button>
     </form>
     {#if passwordPromptRoom}

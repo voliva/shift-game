@@ -53,7 +53,7 @@ type PublicPlayer = {
   finishedRank?: number
 }
 
-type PublicRoom = Omit<Room, 'password' | 'players' | 'wind'> & { players: PublicPlayer[] }
+type PublicRoom = Omit<Room, 'password' | 'players' | 'wind'> & { hasPassword: boolean; players: PublicPlayer[] }
 
 const port = Number.parseInt(process.env.PORT ?? '8787', 10)
 const rooms = new Map<string, Room>()
@@ -93,8 +93,8 @@ httpServer.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
   if (url.pathname === '/ws/create') {
     const name = url.searchParams.get('name')?.trim()
-    const password = url.searchParams.get('password')
-    if (!name || !password) return rejectWebSocket(request, socket, head, 'Room name and password are required.')
+    const password = url.searchParams.get('password') ?? ''
+    if (!name) return rejectWebSocket(request, socket, head, 'Room name is required.')
     return websocketServer.handleUpgrade(request, socket, head, (connection) => {
       const room = createRoom(name, password)
       addPlayer(room, connection, url.searchParams.get('playerName')?.trim() || 'Host', true)
@@ -105,7 +105,7 @@ httpServer.on('upgrade', (request, socket, head) => {
     const room = rooms.get(url.searchParams.get('roomId') ?? '')
     const password = url.searchParams.get('password')
     if (!room) return rejectWebSocket(request, socket, head, 'This room no longer exists.')
-    if (password !== room.password) return rejectWebSocket(request, socket, head, 'Incorrect room password.')
+    if (room.password && password !== room.password) return rejectWebSocket(request, socket, head, 'Incorrect room password.')
     return websocketServer.handleUpgrade(request, socket, head, (connection) => {
       addPlayer(room, connection, url.searchParams.get('playerName')?.trim() || 'Sailor', false)
     })
@@ -376,6 +376,7 @@ function toPublicRoom(room: Room): PublicRoom {
   return {
     id: room.id,
     name: room.name,
+    hasPassword: room.password.length > 0,
     status: room.status,
     gateDistance: room.gateDistance,
     gatesToWin: room.gatesToWin,

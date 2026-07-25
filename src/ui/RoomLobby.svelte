@@ -24,7 +24,7 @@
     <div>
       <p class="eyebrow">{room.status === 'ongoing' ? messages[$language].ongoingRoom : messages[$language].roomLobby}</p>
       <h1>{room.name}</h1>
-      <p class="room-password">{messages[$language].password}: <strong>{room.password}</strong></p>
+      {#if room.hasPassword}<p class="room-password">{messages[$language].password}: <strong>{room.password}</strong></p>{/if}
     </div>
     <button class="text-button" onclick={onLeave}>{messages[$language].leaveRoom}</button>
   </header>
