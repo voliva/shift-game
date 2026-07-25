@@ -15,14 +15,33 @@ type Room = {
   status: 'waiting' | 'ongoing'
   gateDistance: number
   gatesToWin: number
+  wind: ServerWind
   players: Map<WebSocket, Player>
 }
 
-type PublicRoom = Omit<Room, 'password' | 'players'> & { players: Player[] }
+type WindConditions = {
+  targetDirection: number
+  meanDirection: number
+}
+
+type ServerWind = WindConditions & {
+  deviationDirection: number
+  nextShiftAt: number
+  nextDeviationAt: number
+}
+
+type PublicRoom = Omit<Room, 'password' | 'players' | 'wind'> & { players: Player[] }
 
 const port = Number.parseInt(process.env.PORT ?? '8787', 10)
 const rooms = new Map<string, Room>()
 const websocketServer = new WebSocketServer({ noServer: true })
+const SHIFT_INTENSITY = 45
+const MAX_DEVIATION = 45
+
+setInterval(() => {
+  const now = Date.now()
+  for (const room of rooms.values()) updateRoomWind(room, now)
+}, 100)
 
 const httpServer = createServer((request, response) => {
   setCorsHeaders(response)
@@ -70,6 +89,7 @@ httpServer.listen(port, () => {
 })
 
 function createRoom(name: string, password: string): Room {
+  const now = Date.now()
   const room: Room = {
     id: randomUUID(),
     name,
@@ -77,6 +97,7 @@ function createRoom(name: string, password: string): Room {
     status: 'waiting',
     gateDistance: 6_000,
     gatesToWin: 5,
+    wind: createWind(now),
     players: new Map(),
   }
   rooms.set(room.id, room)
@@ -89,6 +110,7 @@ function addPlayer(room: Room, connection: WebSocket, name: string, isAdmin: boo
   connection.on('message', (data) => handleMessage(room, connection, data.toString()))
   connection.on('close', () => removePlayer(room, connection))
   send(connection, { type: 'joined', room: toPublicRoom(room), player })
+  sendWindConditions(connection, room.wind)
   broadcastRoomState(room)
 }
 
@@ -172,6 +194,43 @@ function broadcastRoomState(room: Room): void {
 
 function broadcast(room: Room, message: unknown): void {
   for (const connection of room.players.keys()) send(connection, message)
+}
+
+function createWind(now: number): ServerWind {
+  const meanDirection = Math.random() * MAX_DEVIATION - MAX_DEVIATION / 2
+  return {
+    meanDirection,
+    targetDirection: 0,
+    deviationDirection: Math.random() < 0.5 ? -1 : 1,
+    nextShiftAt: now + shiftDelay(),
+    nextDeviationAt: now + 10_000,
+  }
+}
+
+function updateRoomWind(room: Room, now: number): void {
+  const wind = room.wind
+  while (now >= wind.nextDeviationAt) {
+    wind.meanDirection += wind.deviationDirection
+    if (Math.abs(wind.meanDirection) >= MAX_DEVIATION / 2) wind.deviationDirection *= -1
+    wind.nextDeviationAt += 10_000
+  }
+  if (now < wind.nextShiftAt) return
+
+  wind.targetDirection = wind.meanDirection + Math.random() * SHIFT_INTENSITY - SHIFT_INTENSITY / 2
+  wind.nextShiftAt = now + shiftDelay()
+  broadcast(room, { type: 'wind-conditions', ...toWindConditions(wind) })
+}
+
+function shiftDelay(): number {
+  return (2 + Math.random() * 4) * 1_000
+}
+
+function toWindConditions(wind: ServerWind): WindConditions {
+  return { targetDirection: wind.targetDirection, meanDirection: wind.meanDirection }
+}
+
+function sendWindConditions(connection: WebSocket, wind: ServerWind): void {
+  send(connection, { type: 'wind-conditions', ...toWindConditions(wind) })
 }
 
 function toPublicRoom(room: Room): PublicRoom {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte'
   import { GameSession, type RankingEntry } from './game/GameSession'
+  import type { WindConditions } from './game/Wind'
   import Credits from './ui/Credits.svelte'
   import MainMenu from './ui/MainMenu.svelte'
   import { createRoom as createServerRoom, fetchRooms, joinRoom as joinServerRoom, type RoomConnection } from './network/roomApi'
@@ -26,6 +27,7 @@
   let ranking: RankingEntry[] = []
   let session: GameSession | undefined
   let roomConnection: RoomConnection | undefined
+  let onlineWindConditions: WindConditions | undefined
   let localServerPlayerId: string | undefined
   let countdownToken = 0
   let pendingStart = false
@@ -79,7 +81,8 @@
     if (!password) return 'Enter the room password to join.'
     try {
       roomConnection?.socket.close()
-      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState, startOnlineCountdown)
+      onlineWindConditions = undefined
+      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions)
       roomConnection = connection
       localServerPlayerId = connection.player.id
       currentRoom = { ...connection.room, password }
@@ -97,7 +100,8 @@
   async function createRoom(name: string, password: string): Promise<string | undefined> {
     try {
       roomConnection?.socket.close()
-      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState, startOnlineCountdown)
+      onlineWindConditions = undefined
+      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions)
       roomConnection = connection
       localServerPlayerId = connection.player.id
       currentRoom = { ...connection.room, password }
@@ -139,6 +143,16 @@
     void beginCountdown(Date.now() + Math.max(0, startTimestamp - estimatedServerNow))
   }
 
+  function startLocalRace(): void {
+    onlineWindConditions = undefined
+    void beginCountdown(Date.now() + 3_000)
+  }
+
+  function applyWindConditions(conditions: WindConditions): void {
+    onlineWindConditions = conditions
+    session?.setWindConditions(conditions)
+  }
+
   async function beginCountdown(startAt = Date.now() + 3_000): Promise<void> {
     stopGame()
     pendingStart = true
@@ -160,7 +174,7 @@
   }
 
   function startGame(gameCanvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement): void {
-    session = new GameSession(gameCanvas, minimapCanvas, (nextRanking) => ranking = nextRanking)
+    session = new GameSession(gameCanvas, minimapCanvas, (nextRanking) => ranking = nextRanking, onlineWindConditions)
     session.start(pendingStart)
   }
 
@@ -202,6 +216,7 @@
     roomConnection?.socket.close()
     roomConnection = undefined
     localServerPlayerId = undefined
+    onlineWindConditions = undefined
     currentRoom = undefined
     clearRoomUrl()
     screen = 'rooms'
@@ -218,7 +233,7 @@
 {:else}
   <main class="menu-field">
     {#if screen === 'menu'}
-      <MainMenu onLocalRace={beginCountdown} onOnlinePlay={openOnline} />
+      <MainMenu onLocalRace={startLocalRace} onOnlinePlay={openOnline} />
     {:else if screen === 'rooms'}
       <RoomBrowser {rooms} loading={loadingRooms} externalError={roomsError} onBack={() => screen = 'menu'} onRefresh={openOnline} onJoin={joinRoom} onCreate={createRoom} />
     {:else if screen === 'lobby' && currentRoom}

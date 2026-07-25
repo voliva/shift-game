@@ -5,6 +5,7 @@ import { Race } from './Race'
 import { RemoteBoat } from './RemoteBoat'
 import { RemoteBoatDemo } from './RemoteBoatDemo'
 import { SimpleAiController } from './SimpleAiController'
+import type { WindConditions } from './Wind'
 
 export type RankingEntry = {
   id: string
@@ -43,6 +44,7 @@ export class GameSession {
     gameCanvas: HTMLCanvasElement,
     minimapCanvas: HTMLCanvasElement,
     onRankingChange: (ranking: RankingEntry[]) => void,
+    initialWindConditions?: WindConditions,
   ) {
     const gameContext = gameCanvas.getContext('2d')
     const minimapContext = minimapCanvas.getContext('2d')
@@ -51,6 +53,7 @@ export class GameSession {
     this.fieldRenderer = new CanvasRenderer(gameCanvas, gameContext)
     this.minimapRenderer = new MinimapRenderer(minimapCanvas, minimapContext)
     this.onRankingChange = onRankingChange
+    if (initialWindConditions) this.race.setWindConditions(initialWindConditions)
     this.race.addBoat(this.playerOne)
     this.race.addBoat(this.playerTwo)
     this.race.addBoat(this.aiBoat)
@@ -80,6 +83,10 @@ export class GameSession {
   resume(): void {
     this.paused = false
     this.lastTime = performance.now()
+  }
+
+  setWindConditions(conditions: WindConditions): void {
+    this.race.setWindConditions(conditions)
   }
 
   private frame = (now: number): void => {

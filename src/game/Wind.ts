@@ -1,5 +1,10 @@
 import { MAX_DEVIATION, SHIFT_INTENSITY, WIND_TURN_SPEED } from './constants'
 
+export type WindConditions = {
+  targetDirection: number
+  meanDirection: number
+}
+
 export class Wind {
   direction = 0
   meanDirection = Math.random() * MAX_DEVIATION - MAX_DEVIATION / 2
@@ -7,13 +12,16 @@ export class Wind {
   private deviationDirection = Math.random() < 0.5 ? -1 : 1
   private nextShiftAt = this.shiftDelay()
   private nextDeviationAt = 10_000
+  private authoritative = false
 
   update(now: number, deltaSeconds: number): void {
-    if (now >= this.nextShiftAt) this.makeShift(now)
-    if (now >= this.nextDeviationAt) {
-      this.meanDirection += this.deviationDirection
-      if (Math.abs(this.meanDirection) >= MAX_DEVIATION / 2) this.deviationDirection *= -1
-      this.nextDeviationAt = now + 10_000
+    if (!this.authoritative) {
+      if (now >= this.nextShiftAt) this.makeShift(now)
+      if (now >= this.nextDeviationAt) {
+        this.meanDirection += this.deviationDirection
+        if (Math.abs(this.meanDirection) >= MAX_DEVIATION / 2) this.deviationDirection *= -1
+        this.nextDeviationAt = now + 10_000
+      }
     }
 
     const difference = this.targetDirection - this.direction
@@ -21,7 +29,14 @@ export class Wind {
   }
 
   forceShift(now: number): void {
+    if (this.authoritative) return
     this.makeShift(now)
+  }
+
+  setConditions(conditions: WindConditions): void {
+    this.authoritative = true
+    this.meanDirection = conditions.meanDirection
+    this.targetDirection = conditions.targetDirection
   }
 
   private makeShift(now: number): void {

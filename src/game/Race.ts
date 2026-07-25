@@ -1,5 +1,5 @@
 import { Boat } from './Boat'
-import { Wind } from './Wind'
+import { Wind, type WindConditions } from './Wind'
 
 export class Race {
   readonly wind = new Wind()
@@ -15,5 +15,9 @@ export class Race {
 
   forceWindShift(now: number): void {
     this.wind.forceShift(now)
+  }
+
+  setWindConditions(conditions: WindConditions): void {
+    this.wind.setConditions(conditions)
   }
 }
