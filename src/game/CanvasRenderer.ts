@@ -69,24 +69,53 @@ export class CanvasRenderer {
     this.context.save()
     this.context.translate(screen.x, screen.y)
     this.context.rotate(boat.visualCourse())
+
+    // A narrow bow, broad stern, and a small cockpit make the hull read as a boat at game scale.
+    this.context.save()
+    this.context.scale(0.86, 0.86)
     this.context.beginPath()
-    this.context.moveTo(0, -25)
-    this.context.lineTo(11, 18)
-    this.context.lineTo(0, 24)
-    this.context.lineTo(-11, 18)
+    this.context.moveTo(0, -30)
+    this.context.quadraticCurveTo(10, -22, 13, 4)
+    this.context.quadraticCurveTo(14, 15, 11, 21)
+    this.context.lineTo(-11, 21)
+    this.context.quadraticCurveTo(-14, 15, -13, 4)
+    this.context.quadraticCurveTo(-10, -22, 0, -30)
     this.context.closePath()
     this.context.fillStyle = boat.color
     this.context.fill()
     this.context.lineWidth = 2
     this.context.strokeStyle = boat.outlineColor
     this.context.stroke()
+    this.context.fillStyle = 'rgb(4 48 78 / 36%)'
     this.context.beginPath()
-    this.context.moveTo(0, -20)
-    this.context.lineTo(0, 5)
-    this.context.lineTo(12, 3)
+    this.context.roundRect(-7, 8, 14, 10, 3)
+    this.context.fill()
+    this.context.restore()
+
+    // A top-down triangular rig: heeled mast, aft-running boom, and the sail's leech.
+    const sailSide = boat.visualHeading() >= 0 ? 1 : -1
+    const mastFoot = { x: 0, y: -20 }
+    const mastHead = { x: sailSide * 12, y: -13 }
+    const clew = { x: 0, y: 11 }
+    this.context.beginPath()
+    this.context.moveTo(mastFoot.x, mastFoot.y)
+    this.context.lineTo(mastHead.x, mastHead.y)
+    this.context.lineTo(clew.x, clew.y)
     this.context.closePath()
     this.context.fillStyle = '#f4fff7'
     this.context.fill()
+    this.context.strokeStyle = boat.outlineColor
+    this.context.lineWidth = 1.5
+    this.context.stroke()
+
+    // Draw the mast and boom over the sail so the rig remains anchored to the deck.
+    this.context.strokeStyle = boat.outlineColor
+    this.context.lineWidth = 2
+    this.context.beginPath()
+    this.context.moveTo(mastFoot.x, mastFoot.y)
+    this.context.lineTo(mastHead.x, mastHead.y)
+    this.context.moveTo(mastFoot.x, mastFoot.y)
+    this.context.lineTo(clew.x, clew.y)
     this.context.stroke()
     this.context.restore()
   }

@@ -116,10 +116,15 @@ export class Boat {
 
   visualCourse(): number {
     if (!this.position || !this.race) return 0;
-    const isBeaming = this.isAtGate() && Math.abs(this.position.x) >= DOOR_WIDTH / 2;
+    return this.race.wind.direction + this.visualHeading()
+  }
 
-    if (isBeaming) return -Math.sign(this.position.x) * Math.PI / 2
-    return this.race.wind.direction + this.heading
+  visualHeading(): number {
+    if (!this.position || !this.race) return this.heading
+    const isBeaming = this.isAtGate() && Math.abs(this.position.x) >= DOOR_WIDTH / 2
+    if (!isBeaming) return this.heading
+    const beamCourse = -Math.sign(this.position.x) * Math.PI / 2
+    return this.normalizeAngle(beamCourse - this.race.wind.direction)
   }
 
   private updateHeading(deltaSeconds: number): void {

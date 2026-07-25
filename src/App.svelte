@@ -15,7 +15,7 @@
   type Screen = 'menu' | 'rooms' | 'lobby' | 'race'
   type FinishEntry = { id: string; name: string; color: string; rank: number }
 
-  const DEFAULT_GATE_DISTANCE = 6;
+  const DEFAULT_GATE_DISTANCE = 60;
   const randomBoatNames = ['Sea Biscuit', 'Windward', 'Blue Comet', 'Tidal Pixel', 'North Star']
   const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
 
