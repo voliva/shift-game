@@ -28,6 +28,8 @@ type OnlineRacePlayer = OnlineRaceSetup['players'][number]
 export type GameSessionOptions = {
   initialWindConditions?: WindConditions
   onlineRace?: OnlineRaceSetup
+  course?: { gateDistance: number; gatesToWin: number }
+  onLocalBoatFinish?: () => void
 }
 
 export class GameSession {
@@ -41,6 +43,8 @@ export class GameSession {
   private readonly remoteBoatDemo: RemoteBoatDemo | undefined
   private readonly onLocalBoatState: ((state: RemoteBoatState) => void) | undefined
   private readonly onlineLocalPlayerId: string | undefined
+  private readonly course: { gateDistance: number; gatesToWin: number }
+  private readonly onLocalBoatFinish: (() => void) | undefined
   private readonly onRankingChange: (ranking: RankingEntry[]) => void
   private lastTime = performance.now()
   private lastRankingUpdate = 0
@@ -61,6 +65,8 @@ export class GameSession {
     this.fieldRenderer = new CanvasRenderer(gameCanvas, gameContext)
     this.minimapRenderer = new MinimapRenderer(minimapCanvas, minimapContext)
     this.onRankingChange = onRankingChange
+    this.course = options.course ?? { gateDistance: 6_000, gatesToWin: 5 }
+    this.onLocalBoatFinish = options.onLocalBoatFinish
     if (options.initialWindConditions) this.race.setWindConditions(options.initialWindConditions)
     this.onLocalBoatState = options.onlineRace?.onLocalBoatState
     if (options.onlineRace) {
@@ -128,6 +134,11 @@ export class GameSession {
     this.remoteBoats.get(playerId)?.updateState(state)
   }
 
+  finishBoat(playerId: string): void {
+    const boat = playerId === this.playerOne.id ? this.playerOne : this.remoteBoats.get(playerId)
+    boat?.finish()
+  }
+
   syncOnlinePlayers(players: OnlineRacePlayer[]): void {
     if (!this.onlineLocalPlayerId) return
     const playerIds = new Set(players.map((player) => player.id))
@@ -151,14 +162,18 @@ export class GameSession {
       this.aiController?.update(now, this.race.wind.direction, this.race.wind.meanDirection)
       this.remoteAiController?.update(now, this.race.wind.direction, this.race.wind.meanDirection)
       for (const boat of this.race.boats) boat.update(deltaSeconds, this.race.wind.direction)
+      if (!this.playerOne.isFinished && this.playerOne.hasFinishedCourse()) {
+        this.playerOne.finish()
+        this.onLocalBoatFinish?.()
+      }
       if (this.onLocalBoatState && now - this.lastBoatStateUpdate >= 100) {
         this.lastBoatStateUpdate = now
         this.onLocalBoatState({ ...this.playerOne.position, tack: this.playerOne.currentTack })
       }
     }
 
-    this.fieldRenderer.render(this.race.boats, this.playerOne, this.race.wind.direction, this.race.wind.meanDirection)
-    this.minimapRenderer.render(this.race.boats)
+    this.fieldRenderer.render(this.race.boats, this.playerOne, this.race.wind.direction, this.race.wind.meanDirection, this.course.gateDistance)
+    this.minimapRenderer.render(this.race.boats, this.course.gateDistance)
     if (now - this.lastRankingUpdate >= 100) this.publishRanking(now)
     this.animationFrame = requestAnimationFrame(this.frame)
   }
@@ -200,13 +215,15 @@ export class GameSession {
     this.race.addBoat(boat)
   }
 
-  private boatOptions(player: { id: string; name: string; color: string; start?: { x: number; y: number } }, index: number): { id: string; name: string; color: string; outlineColor: string; start: { x: number; y: number } } {
+  private boatOptions(player: { id: string; name: string; color: string; start?: { x: number; y: number } }, index: number): { id: string; name: string; color: string; outlineColor: string; start: { x: number; y: number }; gateDistance: number; gatesToWin: number } {
     return {
       id: player.id,
       name: player.name,
       color: player.color,
       outlineColor: '#082f49',
       start: player.start ?? { x: (index - 1) * 70, y: 0 },
+      gateDistance: this.course.gateDistance,
+      gatesToWin: this.course.gatesToWin,
     }
   }
 }

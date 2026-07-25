@@ -10,6 +10,14 @@ type Player = {
   start?: { x: number; y: number }
   tack?: 'port' | 'starboard'
   position?: { x: number; y: number }
+  finishedRank?: number
+}
+
+type FinishedPlayer = {
+  id: string
+  name: string
+  color: string
+  rank: number
 }
 
 type Room = {
@@ -21,6 +29,7 @@ type Room = {
   gatesToWin: number
   wind: ServerWind
   players: Map<WebSocket, Player>
+  finishedPlayers: FinishedPlayer[]
 }
 
 type WindConditions = {
@@ -59,7 +68,11 @@ const httpServer = createServer((request, response) => {
 
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`)
   if (request.method === 'GET' && url.pathname === '/api/rooms') {
-    sendJson(response, 200, { rooms: [...rooms.values()].map(toPublicRoom) })
+    sendJson(response, 200, {
+      rooms: [...rooms.values()]
+        .filter((room) => room.finishedPlayers.length === 0)
+        .map(toPublicRoom),
+    })
     return
   }
   sendJson(response, 404, { error: 'Not found' })
@@ -105,6 +118,7 @@ function createRoom(name: string, password: string): Room {
     gatesToWin: 5,
     wind: createWind(now),
     players: new Map(),
+    finishedPlayers: [],
   }
   rooms.set(room.id, room)
   return room
@@ -146,7 +160,9 @@ function handleMessage(room: Room, connection: WebSocket, rawMessage: string): v
   }
 
   if (isStartRaceMessage(message)) startRace(room, connection, player)
+  if (isRaceSettingsMessage(message)) updateRaceSettings(room, player, message)
   if (isBoatStateMessage(message)) broadcastBoatState(room, connection, player, message)
+  if (isRaceFinishMessage(message)) finishRace(room, player)
 }
 
 function isRenameMessage(message: unknown): message is { type: 'set-name'; name: string } {
@@ -171,6 +187,16 @@ function isBoatStateMessage(message: unknown): message is { type: 'boat-state'; 
   return candidate.type === 'boat-state' && Number.isFinite(candidate.x) && Number.isFinite(candidate.y) && (candidate.tack === 'port' || candidate.tack === 'starboard')
 }
 
+function isRaceSettingsMessage(message: unknown): message is { type: 'race-settings'; gateDistance: number; gatesToWin: number } {
+  if (!message || typeof message !== 'object') return false
+  const candidate = message as { type?: unknown; gateDistance?: unknown; gatesToWin?: unknown }
+  return candidate.type === 'race-settings' && Number.isFinite(candidate.gateDistance) && Number.isFinite(candidate.gatesToWin)
+}
+
+function isRaceFinishMessage(message: unknown): message is { type: 'race-finish' } {
+  return Boolean(message && typeof message === 'object' && (message as { type?: unknown }).type === 'race-finish')
+}
+
 function startRace(room: Room, connection: WebSocket, player: Player): void {
   if (!player.isAdmin) {
     send(connection, { type: 'error', error: 'Only the host can start the race.' })
@@ -188,6 +214,30 @@ function startRace(room: Room, connection: WebSocket, player: Player): void {
   const startTimestamp = Date.now() + 3_000
   broadcastRoomState(room)
   broadcast(room, { type: 'race-start', startTimestamp })
+}
+
+function updateRaceSettings(
+  room: Room,
+  player: Player,
+  settings: { gateDistance: number; gatesToWin: number },
+): void {
+  if (!player.isAdmin || room.status !== 'waiting') return
+  room.gateDistance = Math.max(500, Math.round(settings.gateDistance))
+  room.gatesToWin = Math.max(1, Math.round(settings.gatesToWin))
+  broadcastRoomState(room)
+}
+
+function finishRace(room: Room, player: Player): void {
+  if (room.status !== 'ongoing' || player.finishedRank) return
+  player.finishedRank = room.finishedPlayers.length + 1
+  room.finishedPlayers.push({
+    id: player.id,
+    name: player.name,
+    color: player.color ?? '#54d981',
+    rank: player.finishedRank,
+  })
+  broadcastRoomState(room)
+  broadcast(room, { type: 'race-finish', playerId: player.id, rank: player.finishedRank })
 }
 
 function assignBoatColors(room: Room): void {
@@ -319,6 +369,7 @@ function toPublicRoom(room: Room): PublicRoom {
     gateDistance: room.gateDistance,
     gatesToWin: room.gatesToWin,
     players: [...room.players.values()],
+    finishedPlayers: room.finishedPlayers,
   }
 }
 

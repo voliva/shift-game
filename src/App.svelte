@@ -12,6 +12,7 @@
   import type { Room, RoomSummary } from './ui/roomTypes'
 
   type Screen = 'menu' | 'rooms' | 'lobby' | 'race'
+  type FinishEntry = { id: string; name: string; color: string; rank: number }
 
   const randomBoatNames = ['Sea Biscuit', 'Windward', 'Blue Comet', 'Tidal Pixel', 'North Star']
   const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
@@ -26,6 +27,8 @@
   let gatesToWin = 5
   let countdown = 0
   let ranking: RankingEntry[] = []
+  let finishResults: FinishEntry[] = []
+  let localFinishRank: number | undefined
   let session: GameSession | undefined
   let roomConnection: RoomConnection | undefined
   let onlineWindConditions: WindConditions | undefined
@@ -36,6 +39,8 @@
 
   onMount(async () => {
     boatName = localStorage.getItem('shift-game.boat-name') ?? randomBoatNames[Math.floor(Math.random() * randomBoatNames.length)]
+    gateDistance = Number(localStorage.getItem('shift-game.gate-distance')) || gateDistance
+    gatesToWin = Number(localStorage.getItem('shift-game.gates-to-win')) || gatesToWin
     const params = new URLSearchParams(window.location.search)
     const roomId = params.get('roomId')
     const password = params.get('password')
@@ -85,10 +90,11 @@
       roomConnection?.socket.close()
       onlineWindConditions = undefined
       remoteBoatStates.clear()
-      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions, applyRemoteBoatState)
+      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions, applyRemoteBoatState, applyRaceFinish)
       roomConnection = connection
       localServerPlayerId = connection.player.id
       currentRoom = { ...connection.room, password }
+      updateFinishResults()
     } catch (error) {
       return error instanceof Error ? error.message : 'Could not join room.'
     }
@@ -110,7 +116,7 @@
       roomConnection?.socket.close()
       onlineWindConditions = undefined
       remoteBoatStates.clear()
-      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions, applyRemoteBoatState)
+      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions, applyRemoteBoatState, applyRaceFinish)
       roomConnection = connection
       localServerPlayerId = connection.player.id
       currentRoom = { ...connection.room, password }
@@ -120,6 +126,7 @@
     gateDistance = currentRoom.gateDistance
     gatesToWin = currentRoom.gatesToWin
     updateRoomUrl(currentRoom)
+    updateRaceSettings(Number(localStorage.getItem('shift-game.gate-distance')) || gateDistance, Number(localStorage.getItem('shift-game.gates-to-win')) || gatesToWin)
     screen = 'lobby'
     return undefined
   }
@@ -139,7 +146,10 @@
     if (!currentRoom || !localPlayerIsAdmin()) return
     gateDistance = Math.max(500, distance)
     gatesToWin = Math.max(1, gates)
+    localStorage.setItem('shift-game.gate-distance', String(gateDistance))
+    localStorage.setItem('shift-game.gates-to-win', String(gatesToWin))
     currentRoom = { ...currentRoom, gateDistance, gatesToWin }
+    roomConnection?.socket.send(JSON.stringify({ type: 'race-settings', gateDistance, gatesToWin }))
   }
 
   function startOnlineRace(): void {
@@ -166,6 +176,25 @@
     if (playerId === localServerPlayerId) return
     remoteBoatStates.set(playerId, state)
     session?.updateRemoteBoat(playerId, state)
+  }
+
+  function applyRaceFinish(playerId: string, rank: number): void {
+    session?.finishBoat(playerId)
+    if (currentRoom) {
+      currentRoom = { ...currentRoom, players: currentRoom.players.map((player) => player.id === playerId ? { ...player, finishedRank: rank } : player) }
+      updateFinishResults()
+    }
+    if (playerId === localServerPlayerId) localFinishRank = rank
+  }
+
+  function finishLocalBoat(): void {
+    if (roomConnection?.socket.readyState === WebSocket.OPEN) roomConnection.socket.send(JSON.stringify({ type: 'race-finish' }))
+  }
+
+  function updateFinishResults(): void {
+    finishResults = (currentRoom?.finishedPlayers ?? [])
+      .map((player) => ({ id: player.id, name: player.name, color: player.color, rank: player.rank }))
+      .sort((first, second) => first.rank - second.rank)
   }
 
   async function beginCountdown(startAt = Date.now() + 3_000): Promise<void> {
@@ -196,7 +225,10 @@
       })),
       onLocalBoatState: broadcastLocalBoatState,
     } : undefined
-    session = new GameSession(gameCanvas, minimapCanvas, (nextRanking) => ranking = nextRanking, { initialWindConditions: onlineWindConditions, onlineRace })
+    const course = currentRoom ? { gateDistance: currentRoom.gateDistance, gatesToWin: currentRoom.gatesToWin } : { gateDistance, gatesToWin }
+    session = new GameSession(gameCanvas, minimapCanvas, (nextRanking) => ranking = nextRanking, {
+      initialWindConditions: onlineWindConditions, onlineRace, course, onLocalBoatFinish: currentRoom ? finishLocalBoat : undefined,
+    })
     for (const [playerId, state] of remoteBoatStates) session.updateRemoteBoat(playerId, state)
     session.start(pendingStart)
   }
@@ -213,6 +245,8 @@
     session?.destroy()
     session = undefined
     ranking = []
+    finishResults = []
+    localFinishRank = undefined
   }
 
   function applyServerRoomState(room: RoomSummary): void {
@@ -220,9 +254,10 @@
     currentRoom = {
       ...room,
       password: currentRoom.password,
-      gateDistance: currentRoom.gateDistance,
-      gatesToWin: currentRoom.gatesToWin,
     }
+    gateDistance = room.gateDistance
+    gatesToWin = room.gatesToWin
+    updateFinishResults()
     session?.syncOnlinePlayers(room.players.map((player) => ({
       id: player.id, name: player.name, color: player.color ?? '#54d981', start: player.start, tack: player.tack,
     })))
@@ -269,7 +304,7 @@
 </script>
 
 {#if screen === 'race'}
-  <RaceView {ranking} {countdown} onCanvasesReady={startGame} onTack={() => session?.tackPlayer()} onExit={leaveRace} />
+  <RaceView {ranking} {countdown} {finishResults} finishedRank={localFinishRank} totalSailors={currentRoom?.players.length ?? 0} onCanvasesReady={startGame} onTack={() => session?.tackPlayer()} onExit={leaveRace} />
 {:else}
   <main class="menu-field">
     {#if screen === 'menu'}

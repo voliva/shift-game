@@ -4,6 +4,9 @@
 
   export let ranking: RankingEntry[]
   export let countdown: number
+  export let finishResults: { id: string; name: string; color: string; rank: number }[]
+  export let finishedRank: number | undefined
+  export let totalSailors: number
   export let onCanvasesReady: (gameCanvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement) => void
   export let onTack: () => void
   export let onExit: () => void
@@ -31,4 +34,15 @@
   </aside>
   <button class="race-exit" onclick={onExit}>Leave race</button>
   {#if countdown > 0}<div class="countdown" aria-live="assertive">{countdown}</div>{/if}
+  {#if finishedRank}
+    <section class="finish-overlay" aria-live="assertive">
+      <h1>{finishedRank <= Math.ceil(totalSailors / 2) ? 'Congratulations!' : 'Race complete'}</h1>
+      <p>You ended <strong>{finishedRank}{finishedRank === 1 ? 'st' : finishedRank === 2 ? 'nd' : finishedRank === 3 ? 'rd' : 'th'}</strong>.</p>
+      <ol>
+        {#each finishResults as sailor (sailor.id)}
+          <li><span style:background-color={sailor.color}></span>{sailor.rank}. {sailor.name}</li>
+        {/each}
+      </ol>
+    </section>
+  {/if}
 </main>

@@ -1,4 +1,4 @@
-import { DOOR_DISTANCE, DOOR_WIDTH, LAYLINE_LENGTH } from './constants'
+import { DOOR_WIDTH, LAYLINE_LENGTH } from './constants'
 import type { Boat } from './Boat'
 import type { Point } from './types'
 
@@ -25,13 +25,13 @@ export class CanvasRenderer {
     this.context.setTransform(this.viewport.pixelRatio, 0, 0, this.viewport.pixelRatio, 0, 0)
   }
 
-  render(boats: Boat[], camera: Boat, windDirection: number, meanWindDirection: number): void {
+  render(boats: Boat[], camera: Boat, windDirection: number, meanWindDirection: number, gateDistance: number): void {
     this.context.clearRect(0, 0, this.viewport.width, this.viewport.height)
     this.context.fillStyle = '#1295d8'
     this.context.fillRect(0, 0, this.viewport.width, this.viewport.height)
-    this.drawLaylines(camera, meanWindDirection)
+    this.drawLaylines(camera, meanWindDirection, gateDistance)
     this.drawTrails(boats, camera)
-    this.drawDoors(camera)
+    this.drawDoors(camera, gateDistance)
     for (const boat of boats) this.drawBoat(boat, camera, windDirection)
   }
 
@@ -88,9 +88,9 @@ export class CanvasRenderer {
     this.context.restore()
   }
 
-  private drawDoors(camera: Boat): void {
-    const currentDoorY = Math.floor(camera.position.y / DOOR_DISTANCE) * DOOR_DISTANCE
-    for (const doorY of [currentDoorY, currentDoorY + DOOR_DISTANCE]) {
+  private drawDoors(camera: Boat, gateDistance: number): void {
+    const currentDoorY = Math.floor(camera.position.y / gateDistance) * gateDistance
+    for (const doorY of [currentDoorY, currentDoorY + gateDistance]) {
       const left = this.worldToScreen({ x: -DOOR_WIDTH / 2, y: doorY }, camera)
       const right = this.worldToScreen({ x: DOOR_WIDTH / 2, y: doorY }, camera)
       this.context.strokeStyle = 'rgba(255, 127, 10, 0.55)'
@@ -107,8 +107,8 @@ export class CanvasRenderer {
     }
   }
 
-  private drawLaylines(camera: Boat, meanWindDirection: number): void {
-    const currentDoorY = Math.floor(camera.position.y / DOOR_DISTANCE) * DOOR_DISTANCE
+  private drawLaylines(camera: Boat, meanWindDirection: number, gateDistance: number): void {
+    const currentDoorY = Math.floor(camera.position.y / gateDistance) * gateDistance
     const windRadians = (meanWindDirection * Math.PI) / 180
     const laylines = [
       { x: -DOOR_WIDTH / 2, heading: windRadians + Math.PI / 4 },
@@ -118,7 +118,7 @@ export class CanvasRenderer {
     this.context.lineWidth = 2
     this.context.setLineDash([8, 8])
     this.context.beginPath()
-    for (const gateY of [currentDoorY, currentDoorY + DOOR_DISTANCE]) {
+    for (const gateY of [currentDoorY, currentDoorY + gateDistance]) {
       for (const layline of laylines) {
         const start = this.worldToScreen({ x: layline.x, y: gateY }, camera)
         const end = this.worldToScreen({

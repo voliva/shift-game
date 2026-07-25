@@ -16,6 +16,8 @@ export type BoatOptions = {
   outlineColor: string
   start: Point
   tack?: Tack
+  gateDistance?: number
+  gatesToWin?: number
 }
 
 export class Boat {
@@ -28,6 +30,9 @@ export class Boat {
   currentTack: Tack
   heading: number
   isBeaming = false
+  isFinished = false
+  readonly gateDistance: number
+  readonly gatesToWin: number
   private tackStartHeading: number
   private tackElapsed = TACK_DURATION_SECONDS
   private blockedDoorY = 0
@@ -40,6 +45,8 @@ export class Boat {
     this.position = { ...options.start }
     this.trail = [{ ...options.start }]
     this.currentTack = options.tack ?? 'starboard'
+    this.gateDistance = options.gateDistance ?? DOOR_DISTANCE
+    this.gatesToWin = options.gatesToWin ?? 5
     this.heading = this.currentTack === 'port' ? Math.PI / 4 : -Math.PI / 4
     this.tackStartHeading = this.heading
   }
@@ -57,6 +64,7 @@ export class Boat {
   }
 
   update(deltaSeconds: number, windDirection: number): void {
+    if (this.isFinished) return
     this.updateHeading(deltaSeconds)
     const course = (windDirection * Math.PI) / 180 + this.heading
     const speedMultiplier =
@@ -83,8 +91,16 @@ export class Boat {
 
   courseSegmentStart(): number {
     return this.isBeaming
-      ? this.blockedDoorY - DOOR_DISTANCE
-      : Math.floor(this.position.y / DOOR_DISTANCE) * DOOR_DISTANCE
+      ? this.blockedDoorY - this.gateDistance
+      : Math.floor(this.position.y / this.gateDistance) * this.gateDistance
+  }
+
+  hasFinishedCourse(): boolean {
+    return !this.isBeaming && this.position.y >= this.gateDistance * this.gatesToWin
+  }
+
+  finish(): void {
+    this.isFinished = true
   }
 
   protected adjustMovement(movement: Point): Point {
@@ -114,7 +130,7 @@ export class Boat {
   }
 
   private updateSailing(movementX: number, movementY: number, deltaSeconds: number): void {
-    const nextDoorY = (Math.floor(this.position.y / DOOR_DISTANCE) + 1) * DOOR_DISTANCE
+    const nextDoorY = (Math.floor(this.position.y / this.gateDistance) + 1) * this.gateDistance
     const crossesDoor = movementY > 0 && this.position.y < nextDoorY && this.position.y + movementY >= nextDoorY
     if (crossesDoor && Math.abs(this.position.x) >= DOOR_WIDTH / 2) {
       this.blockedDoorY = nextDoorY

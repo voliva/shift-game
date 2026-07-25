@@ -5,6 +5,7 @@ export type Player = {
   color?: string
   start?: { x: number; y: number }
   tack?: 'port' | 'starboard'
+  finishedRank?: number
 }
 
 export type RoomSummary = {
@@ -12,6 +13,7 @@ export type RoomSummary = {
   name: string
   status: 'waiting' | 'ongoing'
   players: Player[]
+  finishedPlayers: { id: string; name: string; color: string; rank: number }[]
   gateDistance: number
   gatesToWin: number
 }
