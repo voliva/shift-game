@@ -116,7 +116,7 @@ export class CanvasRenderer {
     if (!camera.position) return;
 
     const currentDoorY = Math.floor(camera.position.y / gateDistance) * gateDistance
-    const windRadians = (meanWindDirection * Math.PI) / 180
+    const windRadians = meanWindDirection
     const laylines = [
       { x: -DOOR_WIDTH / 2, heading: windRadians + Math.PI / 4 },
       { x: DOOR_WIDTH / 2, heading: windRadians - Math.PI / 4 },

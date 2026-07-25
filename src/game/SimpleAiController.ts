@@ -2,7 +2,7 @@ import { Boat } from './Boat'
 import { DOOR_WIDTH } from './constants'
 import type { Tack } from './types'
 
-const WIND_TACK_THRESHOLD = 2
+const WIND_TACK_THRESHOLD = 2 * Math.PI / 180
 const MIN_LAYLINE_HOLD_MS = 3_000
 const MAX_LAYLINE_HOLD_MS = 7_000
 
@@ -31,7 +31,7 @@ export class SimpleAiBoat extends Boat {
 
     const nextGateY = (Math.floor(this.position.y / this.race.gateDistance) + 1) * this.race.gateDistance
     const distanceToGate = nextGateY - this.position.y
-    const windRadians = (meanWindDirection * Math.PI) / 180
+    const windRadians = meanWindDirection
     const portHeading = windRadians + Math.PI / 4
     const starboardHeading = windRadians - Math.PI / 4
 
@@ -54,9 +54,8 @@ export class SimpleAiBoat extends Boat {
   }
 
   private laylineHoldDuration(tack: Tack, windDirection: number): number {
-    const heading = (windDirection * Math.PI) / 180 + (tack === 'port' ? Math.PI / 4 : -Math.PI / 4)
+    const heading = windDirection + (tack === 'port' ? Math.PI / 4 : -Math.PI / 4)
     const forwardProgress = Math.max(0, Math.cos(heading) / Math.cos(Math.PI / 4))
     return MIN_LAYLINE_HOLD_MS + (MAX_LAYLINE_HOLD_MS - MIN_LAYLINE_HOLD_MS) * Math.min(1, forwardProgress)
   }
 }
-

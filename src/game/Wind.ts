@@ -18,7 +18,7 @@ export class Wind {
     if (!this.authoritative) {
       if (now >= this.nextShiftAt) this.makeShift(now)
       if (now >= this.nextDeviationAt) {
-        this.meanDirection += this.deviationDirection
+        this.meanDirection += this.deviationDirection * Math.PI / 180
         if (Math.abs(this.meanDirection) >= MAX_DEVIATION / 2) this.deviationDirection *= -1
         this.nextDeviationAt = now + 10_000
       }

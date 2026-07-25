@@ -15,6 +15,7 @@
   type Screen = 'menu' | 'rooms' | 'lobby' | 'race'
   type FinishEntry = { id: string; name: string; color: string; rank: number }
 
+  const DEFAULT_GATE_DISTANCE = 6;
   const randomBoatNames = ['Sea Biscuit', 'Windward', 'Blue Comet', 'Tidal Pixel', 'North Star']
   const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
 
@@ -24,7 +25,7 @@
   let roomsError = ''
   let currentRoom: Room | undefined
   let boatName = ''
-  let gateDistance = 60
+  let gateDistance = DEFAULT_GATE_DISTANCE
   let gatesToWin = 3
   let countdown = 0
   let ranking: RankingEntry[] = []
@@ -235,7 +236,7 @@
       gateDistance: currentRoom.gateDistance,
       gatesToWin: currentRoom.gatesToWin
     } : {
-      gateDistance: 60 * GATE_DISTANCE_MULTIPLIER,
+      gateDistance: DEFAULT_GATE_DISTANCE * GATE_DISTANCE_MULTIPLIER,
       gatesToWin: Number.POSITIVE_INFINITY
     }
     session = new GameSession(gameCanvas, minimapCanvas, course, onlineRace)
