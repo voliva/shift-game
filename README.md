@@ -1,4 +1,4 @@
-# Shift Game
+# Rolada
 
 A small browser sailing-race game. Sail upwind through gates, react to wind shifts, and race locally against an AI or with other players online.
 

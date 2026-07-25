@@ -21,7 +21,7 @@ language.subscribe((value) => {
 export const messages = {
   en: {
     language: "Language",
-    gameName: "Shift Game",
+    gameName: "Rolada",
     raceTheWind: "Race the wind.",
     localRace: "Race locally against AI",
     onlinePlay: "Online play",
@@ -70,7 +70,7 @@ export const messages = {
     ended: "You ended",
     course: "COURSE",
     courseMinimap: "Course minimap",
-    gameCanvas: "Shift Game",
+    gameCanvas: "Rolada",
     localPlayer: "You",
     aiPlayer: "Tack Sparrow",
   },
@@ -125,7 +125,7 @@ export const messages = {
     ended: "Has terminado en",
     course: "RECORRIDO",
     courseMinimap: "Minimapa del recorrido",
-    gameCanvas: "Shift Game",
+    gameCanvas: "Rolada",
     localPlayer: "Tú",
     aiPlayer: "Capitán Virada",
   },
@@ -180,7 +180,7 @@ export const messages = {
     ended: "Has acabat en",
     course: "RECORREGUT",
     courseMinimap: "Minimapa del recorregut",
-    gameCanvas: "Shift Game",
+    gameCanvas: "Rolada",
     localPlayer: "Tu",
     aiPlayer: "Capità Virada",
   },
@@ -228,4 +228,10 @@ export function sailingHints(locale: Language): { title: string; items: string[]
       "Other boats do not create wind shadow, so you can sail through them.",
     ],
   }
+}
+
+export function funnyAiNames(locale: Language): [string, string, string] {
+  if (locale === "es") return ["Capitán Virada", "Don Bordo", "Sir Vira Mucho"]
+  if (locale === "ca") return ["Capità Virada", "Bordo Boig", "Sir Vira Massa"]
+  return ["Tack Sparrow", "Captain Tiller", "Sir Veers-a-Lot"]
 }

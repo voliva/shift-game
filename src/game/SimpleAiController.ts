@@ -1,4 +1,4 @@
-import { Boat } from './Boat'
+import { Boat, type BoatOptions } from './Boat'
 import { DOOR_WIDTH } from './constants'
 import type { Tack } from './types'
 
@@ -9,6 +9,12 @@ const MAX_LAYLINE_HOLD_MS = 7_000
 export class SimpleAiBoat extends Boat {
   private holdUntil = 0
   private wasOutsideLayline = false
+  private readonly preferredWindDirection: number
+
+  constructor(options: BoatOptions, preferredWindDirection = 0) {
+    super(options)
+    this.preferredWindDirection = preferredWindDirection
+  }
 
   override update(deltaSeconds: number, now: number): void {
     if (!this.race) {
@@ -28,8 +34,9 @@ export class SimpleAiBoat extends Boat {
       this.wasOutsideLayline = false
       if (isHorizontallyAtGate) this.holdUntil = 0
       if (now >= this.holdUntil) {
-        if (this.race.wind.direction > WIND_TACK_THRESHOLD) this.setTack('starboard')
-        if (this.race.wind.direction < -WIND_TACK_THRESHOLD) this.setTack('port')
+        const windRelativeToPreference = this.race.wind.direction - this.preferredWindDirection
+        if (windRelativeToPreference > WIND_TACK_THRESHOLD) this.setTack('starboard')
+        if (windRelativeToPreference < -WIND_TACK_THRESHOLD) this.setTack('port')
       }
     }
     super.update(deltaSeconds, now)

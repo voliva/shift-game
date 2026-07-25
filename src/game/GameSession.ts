@@ -7,7 +7,7 @@ import { RemoteBoat } from './RemoteBoat'
 import { SimpleAiBoat } from './SimpleAiController'
 import type { Tack } from './types'
 import { get } from 'svelte/store'
-import { language, messages } from '../i18n'
+import { funnyAiNames, language, messages } from '../i18n'
 
 export type RankingEntry = {
   id: string
@@ -82,6 +82,7 @@ export class GameSession {
       }
     } else {
       const localMessages = messages[get(language)]
+      const aiNames = funnyAiNames(get(language))
       this.localPlayer = new Boat({
         id: 'local', name: localMessages.localPlayer, color: '#54d981'
       })
@@ -89,11 +90,16 @@ export class GameSession {
       this.race.addBoat(this.localPlayer)
 
       
-      const aiBoat = new SimpleAiBoat({
-        id: 'ai-boat', name: localMessages.aiPlayer, color: '#f5b84b'
-      })
-      aiBoat.placeInField(this.race, { x: -120, y: 0 }, 'starboard');
-      this.race.addBoat(aiBoat)
+      const aiBoats = [
+        { id: 'ai-boat-1', name: aiNames[0], color: '#f5b84b', x: -140, tack: 'starboard' as const, preference: -10 * Math.PI / 180 },
+        { id: 'ai-boat-2', name: aiNames[1], color: '#a78bfa', x: 0, tack: 'port' as const, preference: 0 },
+        { id: 'ai-boat-3', name: aiNames[2], color: '#fb7185', x: 140, tack: 'starboard' as const, preference: 10 * Math.PI / 180 },
+      ]
+      for (const ai of aiBoats) {
+        const boat = new SimpleAiBoat({ id: ai.id, name: ai.name, color: ai.color }, ai.preference)
+        boat.placeInField(this.race, { x: ai.x, y: 0 }, ai.tack)
+        this.race.addBoat(boat)
+      }
     }
   }
 
