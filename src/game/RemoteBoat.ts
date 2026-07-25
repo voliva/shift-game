@@ -13,13 +13,13 @@ export class RemoteBoat extends Boat {
     this.setTack(state.tack)
   }
 
-  protected override adjustMovement(movement: Point): Point {
-    if (!this.targetPosition) return movement
+  protected override updateSailing(movementX: number, movementY: number) {
+    if (!this.targetPosition || !this.position) return super.updateSailing(movementX, movementY);
 
     const [c,v] = EFFECT;
-    return {
-      x: (c * movement.x + v * (Math.trunc(this.targetPosition.x) - Math.trunc(this.position.x))) / (c+v),
-      y: (c * movement.y + v * (Math.trunc(this.targetPosition.y) - Math.trunc(this.position.y))) / (c+v),
-    }
+    super.updateSailing(
+      (c * movementX + v * (Math.trunc(this.targetPosition.x) - Math.trunc(this.position.x))) / (c+v),
+      (c * movementY + v * (Math.trunc(this.targetPosition.y) - Math.trunc(this.position.y))) / (c+v)
+    )
   }
 }

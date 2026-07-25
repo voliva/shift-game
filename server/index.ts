@@ -43,7 +43,17 @@ type ServerWind = WindConditions & {
   nextDeviationAt: number
 }
 
-type PublicRoom = Omit<Room, 'password' | 'players' | 'wind'> & { players: Player[] }
+type PublicPlayer = {
+  id: string
+  name: string
+  isAdmin: boolean
+  color: string
+  startX: number
+  startTack: 'port' | 'starboard'
+  finishedRank?: number
+}
+
+type PublicRoom = Omit<Room, 'password' | 'players' | 'wind'> & { players: PublicPlayer[] }
 
 const port = Number.parseInt(process.env.PORT ?? '8787', 10)
 const rooms = new Map<string, Room>()
@@ -114,8 +124,8 @@ function createRoom(name: string, password: string): Room {
     name,
     password,
     status: 'waiting',
-    gateDistance: 6_000,
-    gatesToWin: 5,
+    gateDistance: 60,
+    gatesToWin: 3,
     wind: createWind(now),
     players: new Map(),
     finishedPlayers: [],
@@ -131,7 +141,7 @@ function addPlayer(room: Room, connection: WebSocket, name: string, isAdmin: boo
   room.players.set(connection, player)
   connection.on('message', (data) => handleMessage(room, connection, data.toString()))
   connection.on('close', () => removePlayer(room, connection))
-  send(connection, { type: 'joined', room: toPublicRoom(room), player })
+  send(connection, { type: 'joined', room: toPublicRoom(room), player: toPublicPlayer(player) })
   sendWindConditions(connection, room.wind)
   if (room.status === 'ongoing') sendBoatStateSnapshots(connection, existingSailors)
   broadcastRoomState(room)
@@ -368,8 +378,20 @@ function toPublicRoom(room: Room): PublicRoom {
     status: room.status,
     gateDistance: room.gateDistance,
     gatesToWin: room.gatesToWin,
-    players: [...room.players.values()],
+    players: [...room.players.values()].map(toPublicPlayer),
     finishedPlayers: room.finishedPlayers,
+  }
+}
+
+function toPublicPlayer(player: Player): PublicPlayer {
+  return {
+    id: player.id,
+    name: player.name,
+    isAdmin: player.isAdmin,
+    color: player.color ?? '#54d981',
+    startX: player.start?.x ?? 0,
+    startTack: player.tack ?? 'starboard',
+    finishedRank: player.finishedRank,
   }
 }
 

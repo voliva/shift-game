@@ -6,8 +6,8 @@
   export let externalError = ''
   export let onBack: () => void
   export let onRefresh: () => void
-  export let onJoin: (roomId: string, password: string) => Promise<string | undefined>
-  export let onCreate: (name: string, password: string) => Promise<string | undefined>
+  export let onJoin: (roomId: string, password: string) => Promise<string | void>
+  export let onCreate: (name: string, password: string) => Promise<string | void>
 
   let passwordPromptRoom: RoomSummary | undefined
   let roomPassword = ''

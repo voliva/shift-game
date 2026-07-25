@@ -1,54 +1,55 @@
 import {
   BEAM_SPEED_FACTOR,
   BOAT_SPEED,
-  DOOR_DISTANCE,
   DOOR_WIDTH,
   MAX_TRAIL_POINTS,
   TACK_DURATION_SECONDS,
   UPWIND_SPEED,
 } from './constants'
+import type { Race } from './Race'
 import type { Point, Tack } from './types'
+
+// const OUTLINE_COLOR = "#082f49";
 
 export type BoatOptions = {
   id: string
   name: string
   color: string
-  outlineColor: string
-  start: Point
-  tack?: Tack
-  gateDistance?: number
-  gatesToWin?: number
 }
 
 export class Boat {
   readonly id: string
   readonly name: string
   readonly color: string
-  readonly outlineColor: string
-  readonly position: Point
-  readonly trail: Point[]
+  readonly outlineColor = '#082f49'
+  position?: Point
+  race?: Race
+  trail: Point[]
   currentTack: Tack
   heading: number
-  isBeaming = false
-  isFinished = false
-  readonly gateDistance: number
-  readonly gatesToWin: number
   private tackStartHeading: number
   private tackElapsed = TACK_DURATION_SECONDS
-  private blockedDoorY = 0
 
   constructor(options: BoatOptions) {
     this.id = options.id
     this.name = options.name
     this.color = options.color
-    this.outlineColor = options.outlineColor
-    this.position = { ...options.start }
-    this.trail = [{ ...options.start }]
-    this.currentTack = options.tack ?? 'starboard'
-    this.gateDistance = options.gateDistance ?? DOOR_DISTANCE
-    this.gatesToWin = options.gatesToWin ?? 5
-    this.heading = this.currentTack === 'port' ? Math.PI / 4 : -Math.PI / 4
+    this.trail = []
+    this.currentTack = 'starboard'
+    this.heading = -Math.PI / 4
     this.tackStartHeading = this.heading
+  }
+
+  placeInField(
+    race: Race,
+    position: Point,
+    tack: Tack
+  ) {
+    this.race = race;
+    this.position = { ...position };
+    this.trail = [{ ...position }];
+    this.currentTack = tack;
+    this.heading = this.currentTack === 'port' ? Math.PI / 4 : -Math.PI / 4
   }
 
   tack(): void {
@@ -63,48 +64,49 @@ export class Boat {
     this.tackElapsed = 0
   }
 
-  update(deltaSeconds: number, windDirection: number): void {
-    if (this.isFinished) return
+  update(deltaSeconds: number, _now: number): void {
+    if (this.isFinished || !this.race || !this.position) return
+
     this.updateHeading(deltaSeconds)
-    const course = (windDirection * Math.PI) / 180 + this.heading
+    const course = (this.race.wind.direction * Math.PI) / 180 + this.heading
     const speedMultiplier =
       (UPWIND_SPEED + (1 - UPWIND_SPEED) * 16 * this.heading * this.heading / Math.PI / Math.PI) /
       (Math.sqrt(2) * Math.cos(this.heading))
-    const predictedMovement = {
+    const regularMovement = {
       x: Math.sin(course) * BOAT_SPEED * speedMultiplier * deltaSeconds,
       y: Math.cos(course) * BOAT_SPEED * speedMultiplier * deltaSeconds,
     }
-    const movement = this.adjustMovement(predictedMovement)
 
-    if (this.isBeaming) {
-      this.updateBeam(movement.x, movement.y, deltaSeconds)
+    const nextDoorY = (Math.floor(this.position.y / this.race.gateDistance) + 1) * this.race.gateDistance
+    const crossesDoor = this.position.y < nextDoorY && this.position.y + regularMovement.y >= nextDoorY;
+    const isBeaming =
+      (crossesDoor || this.position.y % this.race.gateDistance === 0) && Math.abs(this.position.x) >= DOOR_WIDTH / 2;
+
+    if (isBeaming) {
+      this.updateBeam(deltaSeconds)
     } else {
-      this.updateSailing(movement.x, movement.y, deltaSeconds)
+      this.updateSailing(regularMovement.x, regularMovement.y)
     }
     this.recordTrailPoint()
   }
 
-  visualCourse(windDirection: number): number {
-    if (this.isBeaming) return -Math.sign(this.position.x) * Math.PI / 2
-    return (windDirection * Math.PI) / 180 + this.heading
+  finish() {
+    if (!this.race || !this.position) return;
+
+    this.position.y = this.race.gatesToWin * this.race.gateDistance;
+  }
+  get isFinished() {
+    if (!this.race || !this.position) return false;
+
+    return this.position.y >= this.race.gatesToWin * this.race.gateDistance && Math.abs(this.position.x) < DOOR_WIDTH / 2;
   }
 
-  courseSegmentStart(): number {
-    return this.isBeaming
-      ? this.blockedDoorY - this.gateDistance
-      : Math.floor(this.position.y / this.gateDistance) * this.gateDistance
-  }
+  visualCourse(): number {
+    if (!this.position || !this.race) return 0;
+    const isBeaming = this.position.y % this.race.gateDistance === 0 && Math.abs(this.position.x) >= DOOR_WIDTH / 2;
 
-  hasFinishedCourse(): boolean {
-    return !this.isBeaming && this.position.y >= this.gateDistance * this.gatesToWin
-  }
-
-  finish(): void {
-    this.isFinished = true
-  }
-
-  protected adjustMovement(movement: Point): Point {
-    return movement
+    if (isBeaming) return -Math.sign(this.position.x) * Math.PI / 2
+    return (this.race.wind.direction * Math.PI) / 180 + this.heading
   }
 
   private updateHeading(deltaSeconds: number): void {
@@ -118,32 +120,24 @@ export class Boat {
     this.heading = this.tackStartHeading + (targetHeading - this.tackStartHeading) * progress
   }
 
-  private updateBeam(movementX: number, movementY: number, deltaSeconds: number): void {
-    this.position.y = this.blockedDoorY + 1
-    if (Math.abs(this.position.x) < DOOR_WIDTH / 2) {
-      this.isBeaming = false
-      this.position.x += movementX
-      this.position.y += movementY
-    } else {
-      this.position.x -= Math.sign(this.position.x) * BOAT_SPEED * BEAM_SPEED_FACTOR * deltaSeconds
-    }
+  private updateBeam(deltaSeconds: number): void {
+    if (!this.position || !this.race) return;
+
+    const nextDoorY = (Math.floor(this.position.y / this.race.gateDistance) + 1) * this.race.gateDistance
+    this.position.y = this.position.y % this.race.gateDistance === 0 ? this.position.y : nextDoorY
+    this.position.x -= Math.sign(this.position.x) * BOAT_SPEED * BEAM_SPEED_FACTOR * deltaSeconds
   }
 
-  private updateSailing(movementX: number, movementY: number, deltaSeconds: number): void {
-    const nextDoorY = (Math.floor(this.position.y / this.gateDistance) + 1) * this.gateDistance
-    const crossesDoor = movementY > 0 && this.position.y < nextDoorY && this.position.y + movementY >= nextDoorY
-    if (crossesDoor && Math.abs(this.position.x) >= DOOR_WIDTH / 2) {
-      this.blockedDoorY = nextDoorY
-      this.isBeaming = true
-      this.position.y = this.blockedDoorY + 1
-      this.position.x -= Math.sign(this.position.x) * BOAT_SPEED * BEAM_SPEED_FACTOR * deltaSeconds
-      return
-    }
+  protected updateSailing(movementX: number, movementY: number): void {
+    if (!this.position) return;
+
     this.position.x += movementX
     this.position.y += movementY
   }
 
   private recordTrailPoint(): void {
+    if (!this.position) return;
+
     const previous = this.trail.at(-1)!
     if (Math.hypot(this.position.x - previous.x, this.position.y - previous.y) < 2) return
     this.trail.push({ ...this.position })

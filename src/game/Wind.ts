@@ -14,7 +14,7 @@ export class Wind {
   private nextDeviationAt = 10_000
   private authoritative = false
 
-  update(now: number, deltaSeconds: number): void {
+  update(deltaSeconds: number, now: number): void {
     if (!this.authoritative) {
       if (now >= this.nextShiftAt) this.makeShift(now)
       if (now >= this.nextDeviationAt) {

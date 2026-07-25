@@ -2,8 +2,18 @@ import { Boat } from './Boat'
 import { Wind, type WindConditions } from './Wind'
 
 export class Race {
+  readonly gateDistance: number
+  readonly gatesToWin: number
   readonly wind = new Wind()
   readonly boats: Boat[] = []
+
+  constructor(
+    gateDistance: number,
+    gatesToWin: number
+  ) {
+    this.gateDistance = gateDistance;
+    this.gatesToWin = gatesToWin;
+  }
 
   addBoat(boat: Boat): void {
     this.boats.push(boat)
@@ -14,8 +24,8 @@ export class Race {
     if (index >= 0) this.boats.splice(index, 1)
   }
 
-  updateWind(now: number, deltaSeconds: number): void {
-    this.wind.update(now, deltaSeconds)
+  update(deltaSeconds: number, now: number): void {
+    this.wind.update(deltaSeconds, now)
   }
 
   forceWindShift(now: number): void {

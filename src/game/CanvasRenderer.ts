@@ -1,6 +1,7 @@
-import { DOOR_WIDTH, LAYLINE_LENGTH } from './constants'
-import type { Boat } from './Boat'
-import type { Point } from './types'
+import type { Boat } from './Boat';
+import { DOOR_WIDTH, LAYLINE_LENGTH } from './constants';
+import type { Race } from './Race';
+import type { Point } from './types';
 
 type Viewport = { width: number; height: number; pixelRatio: number }
 
@@ -25,20 +26,20 @@ export class CanvasRenderer {
     this.context.setTransform(this.viewport.pixelRatio, 0, 0, this.viewport.pixelRatio, 0, 0)
   }
 
-  render(boats: Boat[], camera: Boat, windDirection: number, meanWindDirection: number, gateDistance: number): void {
+  render(boats: Boat[], camera: Boat, race: Race): void {
     this.context.clearRect(0, 0, this.viewport.width, this.viewport.height)
     this.context.fillStyle = '#1295d8'
     this.context.fillRect(0, 0, this.viewport.width, this.viewport.height)
-    this.drawLaylines(camera, meanWindDirection, gateDistance)
+    this.drawLaylines(camera, race.wind.meanDirection, race.gateDistance)
     this.drawTrails(boats, camera)
-    this.drawDoors(camera, gateDistance)
-    for (const boat of boats) this.drawBoat(boat, camera, windDirection)
+    this.drawDoors(camera, race.gateDistance)
+    for (const boat of boats) this.drawBoat(boat, camera)
   }
 
   private worldToScreen(point: Point, camera: Boat): Point {
     return {
-      x: this.viewport.width / 2 + point.x - camera.position.x,
-      y: this.viewport.height / 2 - point.y + camera.position.y,
+      x: this.viewport.width / 2 + point.x - (camera.position?.x ?? 0),
+      y: this.viewport.height / 2 - point.y + (camera.position?.y ?? 0),
     }
   }
 
@@ -51,9 +52,9 @@ export class CanvasRenderer {
         if (index === 0) this.context.moveTo(screen.x, screen.y)
         else this.context.lineTo(screen.x, screen.y)
       })
-      this.context.strokeStyle = boat.outlineColor
-      this.context.globalAlpha = 0.55
-      this.context.lineWidth = 2
+      this.context.strokeStyle = boat.color
+      this.context.globalAlpha = 0.8
+      this.context.lineWidth = 3
       this.context.lineCap = 'round'
       this.context.lineJoin = 'round'
       this.context.stroke()
@@ -61,11 +62,13 @@ export class CanvasRenderer {
     }
   }
 
-  private drawBoat(boat: Boat, camera: Boat, windDirection: number): void {
+  private drawBoat(boat: Boat, camera: Boat): void {
+    if (!boat.position) return;
+
     const screen = this.worldToScreen(boat.position, camera)
     this.context.save()
     this.context.translate(screen.x, screen.y)
-    this.context.rotate(boat.visualCourse(windDirection))
+    this.context.rotate(boat.visualCourse())
     this.context.beginPath()
     this.context.moveTo(0, -25)
     this.context.lineTo(11, 18)
@@ -89,6 +92,8 @@ export class CanvasRenderer {
   }
 
   private drawDoors(camera: Boat, gateDistance: number): void {
+    if (!camera.position) return;
+
     const currentDoorY = Math.floor(camera.position.y / gateDistance) * gateDistance
     for (const doorY of [currentDoorY, currentDoorY + gateDistance]) {
       const left = this.worldToScreen({ x: -DOOR_WIDTH / 2, y: doorY }, camera)
@@ -108,6 +113,8 @@ export class CanvasRenderer {
   }
 
   private drawLaylines(camera: Boat, meanWindDirection: number, gateDistance: number): void {
+    if (!camera.position) return;
+
     const currentDoorY = Math.floor(camera.position.y / gateDistance) * gateDistance
     const windRadians = (meanWindDirection * Math.PI) / 180
     const laylines = [

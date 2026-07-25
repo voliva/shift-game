@@ -23,19 +23,20 @@
   let roomsError = ''
   let currentRoom: Room | undefined
   let boatName = ''
-  let gateDistance = 6_000
-  let gatesToWin = 5
+  let gateDistance = 60
+  let gatesToWin = 3
   let countdown = 0
   let ranking: RankingEntry[] = []
   let finishResults: FinishEntry[] = []
   let localFinishRank: number | undefined
   let session: GameSession | undefined
   let roomConnection: RoomConnection | undefined
-  let onlineWindConditions: WindConditions | undefined
   const remoteBoatStates = new Map<string, RemoteBoatState>()
   let localServerPlayerId: string | undefined
-  let countdownToken = 0
-  let pendingStart = false
+  let onlineWindConditions: WindConditions | undefined
+  let awaitingRaceStart = false
+  let reportedFinish = false
+  let rankingTimer: number | undefined
 
   onMount(async () => {
     boatName = localStorage.getItem('shift-game.boat-name') ?? randomBoatNames[Math.floor(Math.random() * randomBoatNames.length)]
@@ -43,12 +44,24 @@
     gatesToWin = Number(localStorage.getItem('shift-game.gates-to-win')) || gatesToWin
     const params = new URLSearchParams(window.location.search)
     const roomId = params.get('roomId')
-    const password = params.get('password')
-    if (roomId && password) {
+    const password = params.get('password') ?? ""
+    if (roomId) {
       await joinFromUrl(roomId, password)
     }
   })
 
+  function stopGame(): void {
+    countdown = 0
+    session?.destroy()
+    session = undefined
+    ranking = []
+    finishResults = []
+    localFinishRank = undefined
+    awaitingRaceStart = false
+    reportedFinish = false
+    if (rankingTimer !== undefined) window.clearInterval(rankingTimer)
+    rankingTimer = undefined
+  }
   onDestroy(stopGame)
 
   async function openOnline(): Promise<void> {
@@ -84,51 +97,54 @@
     }
   }
 
-  async function joinRoom(roomId: string, password: string): Promise<string | undefined> {
-    if (!password) return 'Enter the room password to join.'
+  async function joinRoom(roomId: string, password: string): Promise<string | void> {
     try {
       roomConnection?.socket.close()
-      onlineWindConditions = undefined
       remoteBoatStates.clear()
-      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions, applyRemoteBoatState, applyRaceFinish)
-      roomConnection = connection
-      localServerPlayerId = connection.player.id
-      currentRoom = { ...connection.room, password }
-      updateFinishResults()
+      const connection = await joinServerRoom(roomId, password, boatName, {
+        onBoatState: applyRemoteBoatState,
+        onRaceFinish: applyRaceFinish,
+        onRaceStart: startOnlineCountdown,
+        onRoomState: applyServerRoomState,
+        onWindConditions: applyWindConditions
+      })
+      return loadRoom(connection, password);
     } catch (error) {
       return error instanceof Error ? error.message : 'Could not join room.'
     }
+  }
+
+  async function createRoom(name: string, password: string): Promise<string | void> {
+    try {
+      roomConnection?.socket.close()
+      remoteBoatStates.clear()
+      const connection = await createServerRoom(name.trim(), password, boatName, {
+        onBoatState: applyRemoteBoatState,
+        onRaceFinish: applyRaceFinish,
+        onRaceStart: startOnlineCountdown,
+        onRoomState: applyServerRoomState,
+        onWindConditions: applyWindConditions
+      })
+      return loadRoom(connection, password);
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Could not create room.'
+    }
+  }
+  
+  function loadRoom(connection: RoomConnection, password: string) {
+    roomConnection = connection
+    localServerPlayerId = connection.player.id
+    currentRoom = { ...connection.room, password }
+    updateFinishResults()
     gateDistance = currentRoom.gateDistance
     gatesToWin = currentRoom.gatesToWin
     updateRoomUrl(currentRoom)
     loadingRooms = false
     if (currentRoom.status === 'ongoing') {
-      pendingStart = false
       screen = 'race'
     } else {
       screen = 'lobby'
     }
-    return undefined
-  }
-
-  async function createRoom(name: string, password: string): Promise<string | undefined> {
-    try {
-      roomConnection?.socket.close()
-      onlineWindConditions = undefined
-      remoteBoatStates.clear()
-      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions, applyRemoteBoatState, applyRaceFinish)
-      roomConnection = connection
-      localServerPlayerId = connection.player.id
-      currentRoom = { ...connection.room, password }
-    } catch (error) {
-      return error instanceof Error ? error.message : 'Could not create room.'
-    }
-    gateDistance = currentRoom.gateDistance
-    gatesToWin = currentRoom.gatesToWin
-    updateRoomUrl(currentRoom)
-    updateRaceSettings(Number(localStorage.getItem('shift-game.gate-distance')) || gateDistance, Number(localStorage.getItem('shift-game.gates-to-win')) || gatesToWin)
-    screen = 'lobby'
-    return undefined
   }
 
   function updateBoatName(name: string): void {
@@ -163,13 +179,12 @@
   }
 
   function startLocalRace(): void {
-    onlineWindConditions = undefined
     void beginCountdown(Date.now() + 3_000)
   }
 
   function applyWindConditions(conditions: WindConditions): void {
     onlineWindConditions = conditions
-    session?.setWindConditions(conditions)
+    session?.race.setWindConditions(conditions)
   }
 
   function applyRemoteBoatState(playerId: string, state: RemoteBoatState): void {
@@ -187,66 +202,63 @@
     if (playerId === localServerPlayerId) localFinishRank = rank
   }
 
-  function finishLocalBoat(): void {
-    if (roomConnection?.socket.readyState === WebSocket.OPEN) roomConnection.socket.send(JSON.stringify({ type: 'race-finish' }))
-  }
-
   function updateFinishResults(): void {
     finishResults = (currentRoom?.finishedPlayers ?? [])
       .map((player) => ({ id: player.id, name: player.name, color: player.color, rank: player.rank }))
       .sort((first, second) => first.rank - second.rank)
   }
 
-  async function beginCountdown(startAt = Date.now() + 3_000): Promise<void> {
-    stopGame()
-    pendingStart = true
+  async function beginCountdown(startAt: number): Promise<void> {
+    awaitingRaceStart = true
     screen = 'race'
-    const token = ++countdownToken
     await tick()
-    if (token !== countdownToken) return
     while (true) {
       const remaining = startAt - Date.now()
       if (remaining <= 0) break
       countdown = Math.ceil(remaining / 1_000)
-      const nextBoundary = startAt - (countdown - 1) * 1_000
-      await delay(Math.max(1, nextBoundary - Date.now()))
-      if (token !== countdownToken) return
+      await delay(100)
     }
     countdown = 0
-    pendingStart = false
+    awaitingRaceStart = false
     session?.resume()
   }
 
-  function startGame(gameCanvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement): void {
+  function createSession(gameCanvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement): void {
     const onlineRace = currentRoom && localServerPlayerId ? {
       localPlayerId: localServerPlayerId,
-      players: currentRoom.players.map((player) => ({
-        id: player.id, name: player.name, color: player.color ?? '#54d981', start: player.start, tack: player.tack,
-      })),
+      players: currentRoom.players,
       onLocalBoatState: broadcastLocalBoatState,
     } : undefined
     const course = currentRoom ? { gateDistance: currentRoom.gateDistance, gatesToWin: currentRoom.gatesToWin } : { gateDistance, gatesToWin }
-    session = new GameSession(gameCanvas, minimapCanvas, (nextRanking) => ranking = nextRanking, {
-      initialWindConditions: onlineWindConditions, onlineRace, course, onLocalBoatFinish: currentRoom ? finishLocalBoat : undefined,
-    })
+    session = new GameSession(gameCanvas, minimapCanvas, course, onlineRace)
+    if (onlineWindConditions) session.race.setWindConditions(onlineWindConditions)
     for (const [playerId, state] of remoteBoatStates) session.updateRemoteBoat(playerId, state)
-    session.start(pendingStart)
+    if (currentRoom?.status === 'ongoing') session.start(awaitingRaceStart)
+    else if (awaitingRaceStart) session.start(true)
+    rankingTimer = window.setInterval(updateRanking, 100)
   }
 
   function broadcastLocalBoatState(state: RemoteBoatState): void {
     if (currentRoom?.status !== 'ongoing' || roomConnection?.socket.readyState !== WebSocket.OPEN) return
     roomConnection.socket.send(JSON.stringify({ type: 'boat-state', ...state }))
+    if (!reportedFinish && session?.localPlayer.isFinished) {
+      reportedFinish = true
+      roomConnection.socket.send(JSON.stringify({ type: 'race-finish' }))
+    }
   }
 
-  function stopGame(): void {
-    countdownToken += 1
-    countdown = 0
-    pendingStart = false
-    session?.destroy()
-    session = undefined
-    ranking = []
-    finishResults = []
-    localFinishRank = undefined
+  function updateRanking(): void {
+    if (!session) return
+    const boats = session.race.boats.filter((boat) => boat.position)
+    const ordered = [...boats].sort((first, second) => second.position!.y - first.position!.y)
+    const leaderY = ordered[0]?.position?.y ?? 0
+    ranking = ordered.map((boat, index) => ({
+      id: boat.id,
+      name: boat.name,
+      color: boat.color,
+      gap: leaderY - boat.position!.y,
+      rank: index + 1,
+    }))
   }
 
   function applyServerRoomState(room: RoomSummary): void {
@@ -258,15 +270,17 @@
     gateDistance = room.gateDistance
     gatesToWin = room.gatesToWin
     updateFinishResults()
-    session?.syncOnlinePlayers(room.players.map((player) => ({
-      id: player.id, name: player.name, color: player.color ?? '#54d981', start: player.start, tack: player.tack,
-    })))
+    // session?.syncOnlinePlayers(room.players.map((player) => ({
+    //   id: player.id, name: player.name, color: player.color ?? '#54d981', start: player.start, tack: player.tack,
+    // })))
   }
 
   function updateRoomUrl(room: Room): void {
     const url = new URL(window.location.href)
     url.searchParams.set('roomId', room.id)
-    url.searchParams.set('password', room.password)
+    if (room.password) {
+      url.searchParams.set('password', room.password)
+    }
     window.history.replaceState({}, '', url)
   }
 
@@ -286,7 +300,6 @@
     roomConnection?.socket.close()
     roomConnection = undefined
     localServerPlayerId = undefined
-    onlineWindConditions = undefined
     remoteBoatStates.clear()
     currentRoom = undefined
     clearRoomUrl()
@@ -304,7 +317,7 @@
 </script>
 
 {#if screen === 'race'}
-  <RaceView {ranking} {countdown} {finishResults} finishedRank={localFinishRank} totalSailors={currentRoom?.players.length ?? 0} onCanvasesReady={startGame} onTack={() => session?.tackPlayer()} onExit={leaveRace} />
+  <RaceView {ranking} {countdown} {finishResults} finishedRank={localFinishRank} totalSailors={currentRoom?.players.length ?? 0} onCanvasesReady={createSession} onTack={() => session?.localPlayer.tack()} onExit={leaveRace} />
 {:else}
   <main class="menu-field">
     {#if screen === 'menu'}

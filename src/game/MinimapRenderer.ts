@@ -1,5 +1,6 @@
 import type { Boat } from './Boat'
 import { DOOR_WIDTH } from './constants'
+import type { Race } from './Race'
 
 export class MinimapRenderer {
   private width = 0
@@ -22,15 +23,15 @@ export class MinimapRenderer {
     this.context.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0)
   }
 
-  render(boats: Boat[], gateDistance: number): void {
+  render(boats: Boat[], race: Race): void {
     this.context.clearRect(0, 0, this.width, this.height)
     const centerX = this.width / 2
     const startY = this.height - 26
     const finishY = 36
     const middleY = (startY + finishY) / 2
-    const mapScale = Math.min((this.width - 24) / (gateDistance + DOOR_WIDTH), (startY - finishY) / gateDistance)
+    const mapScale = Math.min((this.width - 24) / (race.gateDistance + DOOR_WIDTH), (startY - finishY) / race.gateDistance)
     const gateHalfWidth = (DOOR_WIDTH / 2) * mapScale
-    const tunnelHalfWidth = (gateDistance / 2 + DOOR_WIDTH / 2) * mapScale
+    const tunnelHalfWidth = (race.gateDistance / 2 + DOOR_WIDTH / 2) * mapScale
 
     this.context.save()
     this.context.globalAlpha = 0.8
@@ -60,8 +61,10 @@ export class MinimapRenderer {
     this.context.lineTo(centerX + gateHalfWidth, finishY)
     this.context.stroke()
     for (const boat of boats) {
-      const segmentStartY = boat.courseSegmentStart()
-      const progress = Math.max(0, Math.min(1, (boat.position.y - segmentStartY) / gateDistance))
+      if (!boat.position) continue;
+
+      const lapY = boat.position.y % race.gateDistance;
+      const progress = lapY === 0 ? 1 : Math.max(0, Math.min(1, lapY / race.gateDistance));
       const boatY = startY + (finishY - startY) * progress
       const boatX = centerX + Math.max(-tunnelHalfWidth, Math.min(tunnelHalfWidth, boat.position.x * mapScale))
       this.context.fillStyle = boat.color

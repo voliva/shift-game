@@ -1,10 +1,12 @@
+import type { Tack } from "../game/types"
+
 export type Player = {
   id: string
   name: string
   isAdmin?: boolean
-  color?: string
-  start?: { x: number; y: number }
-  tack?: 'port' | 'starboard'
+  color: string
+  startX: number
+  startTack: Tack
   finishedRank?: number
 }
 

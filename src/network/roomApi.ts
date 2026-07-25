@@ -32,37 +32,32 @@ export function createRoom(
   name: string,
   password: string,
   playerName: string,
-  onRoomState: (room: RoomSummary) => void,
-  onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
-  onWindConditions: (conditions: WindConditions) => void,
-  onBoatState: (playerId: string, state: RemoteBoatState) => void,
-  onRaceFinish: (playerId: string, rank: number) => void,
+  handlers: Handlers
 ): Promise<RoomConnection> {
   const query = new URLSearchParams({ name, password, playerName })
-  return connect(`/ws/create?${query}`, onRoomState, onRaceStart, onWindConditions, onBoatState, onRaceFinish)
+  return connect(`/ws/create?${query}`, handlers)
 }
 
+export type Handlers = {
+    onRoomState: (room: RoomSummary) => void,
+    onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
+    onWindConditions: (conditions: WindConditions) => void,
+    onBoatState: (playerId: string, state: RemoteBoatState) => void,
+    onRaceFinish: (playerId: string, rank: number) => void,
+  }
 export function joinRoom(
   roomId: string,
   password: string,
   playerName: string,
-  onRoomState: (room: RoomSummary) => void,
-  onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
-  onWindConditions: (conditions: WindConditions) => void,
-  onBoatState: (playerId: string, state: RemoteBoatState) => void,
-  onRaceFinish: (playerId: string, rank: number) => void,
+  handlers: Handlers
 ): Promise<RoomConnection> {
   const query = new URLSearchParams({ roomId, password, playerName })
-  return connect(`/ws/join?${query}`, onRoomState, onRaceStart, onWindConditions, onBoatState, onRaceFinish)
+  return connect(`/ws/join?${query}`, handlers)
 }
 
 function connect(
   path: string,
-  onRoomState: (room: RoomSummary) => void,
-  onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
-  onWindConditions: (conditions: WindConditions) => void,
-  onBoatState: (playerId: string, state: RemoteBoatState) => void,
-  onRaceFinish: (playerId: string, rank: number) => void,
+  handlers: Handlers
 ): Promise<RoomConnection> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`${websocketBaseUrl}${path}`)
@@ -75,15 +70,15 @@ function connect(
     socket.addEventListener('message', (event) => {
       const message = parseMessage(event.data)
       if (!message) return
-      if (message.type === 'room-state') onRoomState(message.room)
+      if (message.type === 'room-state') handlers.onRoomState(message.room)
       if (message.type === 'pong') {
         const roundTripTime = Date.now() - message.clientTimestamp
         serverClockOffset = message.serverTimestamp - (message.clientTimestamp + roundTripTime / 2)
       }
-      if (message.type === 'race-start') onRaceStart(message.startTimestamp, getServerClockOffset)
-      if (message.type === 'wind-conditions') onWindConditions(message)
-      if (message.type === 'boat-state') onBoatState(message.playerId, message)
-      if (message.type === 'race-finish') onRaceFinish(message.playerId, message.rank)
+      if (message.type === 'race-start') handlers.onRaceStart(message.startTimestamp, getServerClockOffset)
+      if (message.type === 'wind-conditions') handlers.onWindConditions(message)
+      if (message.type === 'boat-state') handlers.onBoatState(message.playerId, message)
+      if (message.type === 'race-finish') handlers.onRaceFinish(message.playerId, message.rank)
       if (message.type === 'joined') {
         connected = true
         resolve({ socket, room: message.room, player: message.player, getServerClockOffset })
