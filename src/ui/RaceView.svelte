@@ -16,7 +16,16 @@
   let gameCanvas: HTMLCanvasElement
   let minimapCanvas: HTMLCanvasElement
 
-  onMount(() => onCanvasesReady(gameCanvas, minimapCanvas))
+  onMount(() => {
+    onCanvasesReady(gameCanvas, minimapCanvas)
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat) return
+      event.preventDefault()
+      onTack()
+    }
+    window.addEventListener('keydown', handleKeydown)
+    return () => window.removeEventListener('keydown', handleKeydown)
+  })
 </script>
 
 <main class="race-shell">

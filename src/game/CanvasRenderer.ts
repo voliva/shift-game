@@ -127,7 +127,7 @@ export class CanvasRenderer {
     for (const doorY of [currentDoorY, currentDoorY + gateDistance]) {
       const left = this.worldToScreen({ x: -DOOR_WIDTH / 2, y: doorY }, camera)
       const right = this.worldToScreen({ x: DOOR_WIDTH / 2, y: doorY }, camera)
-      this.context.strokeStyle = 'rgba(255, 127, 10, 0.55)'
+      this.context.strokeStyle = '#ff7f0a'
       this.context.lineWidth = 3
       this.context.beginPath()
       this.context.moveTo(left.x, left.y)

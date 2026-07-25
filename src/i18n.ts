@@ -196,3 +196,36 @@ export function optionalLabel(locale: Language): string {
   if (locale === "es" || locale === "ca") return "(opcional)";
   return "(optional)";
 }
+
+export function sailingHints(locale: Language): { title: string; items: string[] } {
+  if (locale === "es") return {
+    title: "Cómo jugar",
+    items: [
+      "Toca la pantalla o pulsa Espacio para virar.",
+      "Los barcos siempre navegan de ceñida.",
+      "Sigue los cambios de viento: una rolada favorable hace que un bordo sea más rápido.",
+      "Cruza cada puerta entre sus extremos. Si la fallas, tendrás que llegar de través.",
+      "Los demás barcos no generan desvento: puedes navegar a través de ellos.",
+    ],
+  }
+  if (locale === "ca") return {
+    title: "Com jugar",
+    items: [
+      "Toca la pantalla o prem Espai per virar.",
+      "Els vaixells sempre naveguen de cenyida.",
+      "Segueix els canvis de vent: una rolada favorable fa que un bord sigui més ràpid.",
+      "Creua cada porta entre els seus extrems. Si la falles, hauràs d'anar de través.",
+      "Els altres vaixells no generen desvent: pots navegar a través d'ells.",
+    ],
+  }
+  return {
+    title: "How to play",
+    items: [
+      "Tap/click the water or press Space to tack.",
+      "Boats always sail upwind, close-hauled.",
+      "Follow wind shifts: a favourable shift makes one tack faster.",
+      "Cross each gate between its ends. Missing it forces you to beam back.",
+      "Other boats do not create wind shadow, so you can sail through them.",
+    ],
+  }
+}
