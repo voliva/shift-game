@@ -49,6 +49,7 @@ type PublicPlayer = {
   isAdmin: boolean
   color: string
   startX: number
+  startY: number
   startTack: 'port' | 'starboard'
   finishedRank?: number
 }
@@ -268,16 +269,10 @@ function assignLateJoinState(player: Player, sailors: Player[]): void {
   player.tack = Math.random() < 0.5 ? 'port' : 'starboard'
 
   const positions = sailors.map((sailor) => sailor.position ?? sailor.start ?? { x: 0, y: 0 })
-  if (positions.length === 1) {
-    player.start = { x: positions[0].x, y: positions[0].y - LATE_JOIN_DISTANCE }
-    return
-  }
-  const first = positions.reduce((leader, position) => position.y > leader.y ? position : leader)
   const last = positions.reduce((trailer, position) => position.y < trailer.y ? position : trailer)
-  const progress = 0.75
   player.start = {
-    x: first.x + (last.x - first.x) * progress,
-    y: first.y + (last.y - first.y) * progress,
+    x: last.x + (Math.random() < 0.5 ? -LATE_JOIN_DISTANCE : LATE_JOIN_DISTANCE),
+    y: last.y,
   }
 }
 
@@ -349,7 +344,7 @@ function createWind(now: number): ServerWind {
 function updateRoomWind(room: Room, now: number): void {
   const wind = room.wind
   while (now >= wind.nextDeviationAt) {
-    wind.meanDirection += wind.deviationDirection
+    wind.meanDirection += wind.deviationDirection * Math.PI / 180
     if (Math.abs(wind.meanDirection) >= MAX_DEVIATION / 2) wind.deviationDirection *= -1
     wind.nextDeviationAt += 10_000
   }
@@ -392,6 +387,7 @@ function toPublicPlayer(player: Player): PublicPlayer {
     isAdmin: player.isAdmin,
     color: player.color ?? '#54d981',
     startX: player.start?.x ?? 0,
+    startY: player.start?.y ?? 0,
     startTack: player.tack ?? 'starboard',
     finishedRank: player.finishedRank,
   }

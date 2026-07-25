@@ -6,6 +6,7 @@ export type Player = {
   isAdmin?: boolean
   color: string
   startX: number
+  startY: number
   startTack: Tack
   finishedRank?: number
 }

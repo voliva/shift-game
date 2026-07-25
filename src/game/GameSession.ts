@@ -5,7 +5,7 @@ import { Race } from './Race'
 import type { RemoteBoatState } from './RemoteBoat'
 import { RemoteBoat } from './RemoteBoat'
 import { SimpleAiBoat } from './SimpleAiController'
-import type { Point, Tack } from './types'
+import type { Tack } from './types'
 import { get } from 'svelte/store'
 import { language, messages } from '../i18n'
 
@@ -19,7 +19,8 @@ export type RankingEntry = {
 
 export type OnlineRaceSetup = {
   localPlayerId: string
-  players: { id: string; name: string; color: string; startX: number, startTack: Tack }[]
+  players: { id: string; name: string; color: string; startX: number; startY: number; startTack: Tack }[]
+  deferRemoteBoats?: boolean
   onLocalBoatState?: (state: RemoteBoatState) => void
 }
 
@@ -34,6 +35,7 @@ export class GameSession {
   readonly race;
   readonly localPlayer: Boat
   private readonly remoteBoats = new Map<string, RemoteBoat>()
+  private readonly onlinePlayers = new Map<string, OnlineRacePlayer>()
   private readonly fieldRenderer: CanvasRenderer
   private readonly minimapRenderer: MinimapRenderer
 
@@ -62,15 +64,16 @@ export class GameSession {
       this.localPlayer = undefined as any;
 
       for (const player of onlineRace.players) {
+        this.onlinePlayers.set(player.id, player)
         if (player.id === onlineRace.localPlayerId) {
           this.localPlayer = new Boat(player)
-          this.localPlayer.placeInField(this.race, { x: player.startX, y: 0 }, player.startTack);
+          this.localPlayer.placeInField(this.race, { x: player.startX, y: player.startY }, player.startTack);
           this.race.addBoat(this.localPlayer)
-        } else {
+        } else if (!onlineRace.deferRemoteBoats) {
           const boat = new RemoteBoat(player)
-          boat.placeInField(this.race, { x: player.startX, y: 0 }, player.startTack);
+          boat.placeInField(this.race, { x: player.startX, y: player.startY }, player.startTack)
           this.race.addBoat(boat)
-          this.remoteBoats.set(player.id, boat);
+          this.remoteBoats.set(player.id, boat)
         }
       }
 
@@ -113,7 +116,16 @@ export class GameSession {
   }
 
   updateRemoteBoat(playerId: string, state: RemoteBoatState): void {
-    this.remoteBoats.get(playerId)?.updateState(state)
+    let boat = this.remoteBoats.get(playerId)
+    if (!boat) {
+      const player = this.onlinePlayers.get(playerId)
+      if (!player) return
+      boat = new RemoteBoat(player)
+      boat.placeInField(this.race, { x: state.x, y: state.y }, state.tack)
+      this.race.addBoat(boat)
+      this.remoteBoats.set(playerId, boat)
+    }
+    boat.updateState(state)
   }
 
   finishBoat(playerId: string): void {
@@ -122,14 +134,12 @@ export class GameSession {
   }
 
   // After the race has already started
-  addRemotePlayer(player: OnlineRacePlayer, startingPosition: Point, startingTack: Tack) {
-    const boat = new RemoteBoat(player)
-    boat.placeInField(this.race, startingPosition, startingTack);
-    this.race.addBoat(boat)
-    this.remoteBoats.set(player.id, boat);
+  addRemotePlayer(player: OnlineRacePlayer) {
+    this.onlinePlayers.set(player.id, player)
   }
 
   removeRemotePlayer(playerId: string) {
+    this.onlinePlayers.delete(playerId)
     this.remoteBoats.delete(playerId)
     this.race.removeBoat(playerId)
   }

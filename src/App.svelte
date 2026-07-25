@@ -38,6 +38,7 @@
   const remoteBoatStates = new Map<string, RemoteBoatState>()
   let localServerPlayerId: string | undefined
   let onlineWindConditions: WindConditions | undefined
+  let joinedOngoingRace = false
   let awaitingRaceStart = false
   let reportedFinish = false
   let rankingTimer: number | undefined
@@ -139,6 +140,7 @@
     roomConnection = connection
     localServerPlayerId = connection.player.id
     currentRoom = { ...connection.room, password }
+    joinedOngoingRace = currentRoom.status === 'ongoing'
     updateFinishResults()
     gateDistance = currentRoom.gateDistance / GATE_DISTANCE_MULTIPLIER
     gatesToWin = currentRoom.gatesToWin
@@ -232,6 +234,7 @@
     const onlineRace = currentRoom && localServerPlayerId ? {
       localPlayerId: localServerPlayerId,
       players: currentRoom.players,
+      deferRemoteBoats: joinedOngoingRace,
       onLocalBoatState: broadcastLocalBoatState,
     } : undefined
     const course = currentRoom ? {
@@ -281,9 +284,19 @@
     gateDistance = room.gateDistance / GATE_DISTANCE_MULTIPLIER
     gatesToWin = room.gatesToWin
     updateFinishResults()
-    // session?.syncOnlinePlayers(room.players.map((player) => ({
-    //   id: player.id, name: player.name, color: player.color ?? '#54d981', start: player.start, tack: player.tack,
-    // })))
+    if (!session || !localServerPlayerId) return
+
+    const activeRemoteIds = new Set(room.players.filter((player) => player.id !== localServerPlayerId).map((player) => player.id))
+    for (const player of room.players) {
+      if (player.id === localServerPlayerId) continue
+      session.addRemotePlayer(player)
+    }
+    for (const boat of [...session.race.boats]) {
+      if (boat.id !== localServerPlayerId && !activeRemoteIds.has(boat.id)) {
+        session.removeRemotePlayer(boat.id)
+        remoteBoatStates.delete(boat.id)
+      }
+    }
   }
 
   function updateRoomUrl(room: Room): void {
@@ -313,6 +326,7 @@
     localServerPlayerId = undefined
     remoteBoatStates.clear()
     currentRoom = undefined
+    joinedOngoingRace = false
     clearRoomUrl()
     await openOnline()
   }
