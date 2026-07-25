@@ -20,7 +20,7 @@
 </script>
 
 <main class="race-shell">
-  <canvas bind:this={gameCanvas} class="game-canvas" aria-label={messages[$language].gameCanvas} onpointerdown={(event) => { event.preventDefault(); onTack() }}></canvas>
+  <canvas bind:this={gameCanvas} class="game-canvas" aria-label={messages[$language].gameName} onpointerdown={(event) => { event.preventDefault(); onTack() }}></canvas>
   <canvas bind:this={minimapCanvas} class="minimap" aria-label={messages[$language].courseMinimap}></canvas>
   <aside class="hud" aria-label={messages[$language].ranking}>
     <h2>{messages[$language].ranking}</h2>

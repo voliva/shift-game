@@ -21,6 +21,7 @@ language.subscribe((value) => {
 export const messages = {
   en: {
     language: "Language",
+    gameName: "Shift Game",
     raceTheWind: "Race the wind.",
     localRace: "Race locally against AI",
     onlinePlay: "Online play",
@@ -75,6 +76,7 @@ export const messages = {
   },
   es: {
     language: "Idioma",
+    gameName: "Rolada",
     raceTheWind: "Navega hacia el viento.",
     localRace: "Jugar contra una IA",
     onlinePlay: "Jugar en línea",
@@ -129,6 +131,7 @@ export const messages = {
   },
   ca: {
     language: "Idioma",
+    gameName: "Rolada",
     raceTheWind: "Navega contra el vent.",
     localRace: "Juga contra una IA",
     onlinePlay: "Juga en línia",

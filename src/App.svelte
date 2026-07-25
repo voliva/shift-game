@@ -43,6 +43,8 @@
   let reportedFinish = false
   let rankingTimer: number | undefined
 
+  $: document.title = messages[$language].gameName
+
   onMount(async () => {
     boatName = localStorage.getItem('shift-game.boat-name') ?? randomBoatNames[Math.floor(Math.random() * randomBoatNames.length)]
     gateDistance = Number(localStorage.getItem('shift-game.gate-distance')) || gateDistance

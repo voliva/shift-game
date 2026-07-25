@@ -6,8 +6,8 @@
 </script>
 
 <section class="panel main-menu">
-  <p class="eyebrow">SHIFT GAME</p>
-  <h1 style="margin-bottom: 16px;">{messages[$language].raceTheWind}</h1>
+  <h1 class="game-title">{messages[$language].gameName}</h1>
+  <p class="game-tagline">{messages[$language].raceTheWind}</p>
   <button class="primary" onclick={onLocalRace}>{messages[$language].localRace}</button>
   <button class="secondary" onclick={onOnlinePlay}>{messages[$language].onlinePlay}</button>
   <label class="language-picker">{messages[$language].language}
