@@ -96,7 +96,12 @@
     gatesToWin = currentRoom.gatesToWin
     updateRoomUrl(currentRoom)
     loadingRooms = false
-    screen = 'lobby'
+    if (currentRoom.status === 'ongoing') {
+      pendingStart = false
+      screen = 'race'
+    } else {
+      screen = 'lobby'
+    }
     return undefined
   }
 
@@ -218,6 +223,9 @@
       gateDistance: currentRoom.gateDistance,
       gatesToWin: currentRoom.gatesToWin,
     }
+    session?.syncOnlinePlayers(room.players.map((player) => ({
+      id: player.id, name: player.name, color: player.color ?? '#54d981', start: player.start, tack: player.tack,
+    })))
   }
 
   function updateRoomUrl(room: Room): void {
@@ -235,6 +243,10 @@
   }
 
   function leaveLobby(): void {
+    void leaveRoom()
+  }
+
+  async function leaveRoom(): Promise<void> {
     if (!currentRoom) return
     roomConnection?.socket.close()
     roomConnection = undefined
@@ -243,12 +255,16 @@
     remoteBoatStates.clear()
     currentRoom = undefined
     clearRoomUrl()
-    screen = 'rooms'
+    await openOnline()
   }
 
   function leaveRace(): void {
     stopGame()
-    screen = currentRoom ? 'lobby' : 'menu'
+    if (currentRoom) {
+      void leaveRoom()
+      return
+    }
+    screen = 'menu'
   }
 </script>
 

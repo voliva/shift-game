@@ -9,6 +9,11 @@ export class Race {
     this.boats.push(boat)
   }
 
+  removeBoat(id: string): void {
+    const index = this.boats.findIndex((boat) => boat.id === id)
+    if (index >= 0) this.boats.splice(index, 1)
+  }
+
   updateWind(now: number, deltaSeconds: number): void {
     this.wind.update(now, deltaSeconds)
   }

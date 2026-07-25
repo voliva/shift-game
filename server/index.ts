@@ -9,6 +9,7 @@ type Player = {
   color?: string
   start?: { x: number; y: number }
   tack?: 'port' | 'starboard'
+  position?: { x: number; y: number }
 }
 
 type Room = {
@@ -41,6 +42,7 @@ const websocketServer = new WebSocketServer({ noServer: true })
 const SHIFT_INTENSITY = 45
 const MAX_DEVIATION = 45
 const BOAT_COLORS = ['#54d981', '#a78bfa', '#f5b84b', '#fb7185', '#38bdf8', '#f97316', '#e879f9', '#2dd4bf']
+const LATE_JOIN_DISTANCE = 200
 
 setInterval(() => {
   const now = Date.now()
@@ -110,11 +112,14 @@ function createRoom(name: string, password: string): Room {
 
 function addPlayer(room: Room, connection: WebSocket, name: string, isAdmin: boolean): void {
   const player: Player = { id: randomUUID(), name, isAdmin }
+  const existingSailors = [...room.players.values()]
+  if (room.status === 'ongoing') assignLateJoinState(player, existingSailors)
   room.players.set(connection, player)
   connection.on('message', (data) => handleMessage(room, connection, data.toString()))
   connection.on('close', () => removePlayer(room, connection))
   send(connection, { type: 'joined', room: toPublicRoom(room), player })
   sendWindConditions(connection, room.wind)
+  if (room.status === 'ongoing') sendBoatStateSnapshots(connection, existingSailors)
   broadcastRoomState(room)
 }
 
@@ -194,6 +199,27 @@ function assignBoatColors(room: Room): void {
   }
 }
 
+function assignLateJoinState(player: Player, sailors: Player[]): void {
+  const usedColors = new Set(sailors.map((sailor) => sailor.color).filter((color): color is string => Boolean(color)))
+  const availableColors = BOAT_COLORS.filter((color) => !usedColors.has(color))
+  const colors = availableColors.length > 0 ? availableColors : BOAT_COLORS
+  player.color = colors[Math.floor(Math.random() * colors.length)]
+  player.tack = Math.random() < 0.5 ? 'port' : 'starboard'
+
+  const positions = sailors.map((sailor) => sailor.position ?? sailor.start ?? { x: 0, y: 0 })
+  if (positions.length === 1) {
+    player.start = { x: positions[0].x, y: positions[0].y - LATE_JOIN_DISTANCE }
+    return
+  }
+  const first = positions.reduce((leader, position) => position.y > leader.y ? position : leader)
+  const last = positions.reduce((trailer, position) => position.y < trailer.y ? position : trailer)
+  const progress = 0.75
+  player.start = {
+    x: first.x + (last.x - first.x) * progress,
+    y: first.y + (last.y - first.y) * progress,
+  }
+}
+
 function assignStartingPositions(room: Room): void {
   const sailors = [...room.players.values()]
   sailors.forEach((sailor, index) => {
@@ -209,9 +235,18 @@ function broadcastBoatState(
   state: { x: number; y: number; tack: 'port' | 'starboard' },
 ): void {
   if (room.status !== 'ongoing') return
+  player.position = { x: state.x, y: state.y }
   const message = { type: 'boat-state', playerId: player.id, x: state.x, y: state.y, tack: state.tack }
   for (const connection of room.players.keys()) {
     if (connection !== sender) send(connection, message)
+  }
+}
+
+function sendBoatStateSnapshots(connection: WebSocket, sailors: Player[]): void {
+  for (const sailor of sailors) {
+    const position = sailor.position ?? sailor.start
+    if (!position || !sailor.tack) continue
+    send(connection, { type: 'boat-state', playerId: sailor.id, x: position.x, y: position.y, tack: sailor.tack })
   }
 }
 

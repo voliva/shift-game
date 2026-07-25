@@ -23,6 +23,8 @@ export type OnlineRaceSetup = {
   onLocalBoatState: (state: RemoteBoatState) => void
 }
 
+type OnlineRacePlayer = OnlineRaceSetup['players'][number]
+
 export type GameSessionOptions = {
   initialWindConditions?: WindConditions
   onlineRace?: OnlineRaceSetup
@@ -38,6 +40,7 @@ export class GameSession {
   private readonly remoteAiController: SimpleAiController | undefined
   private readonly remoteBoatDemo: RemoteBoatDemo | undefined
   private readonly onLocalBoatState: ((state: RemoteBoatState) => void) | undefined
+  private readonly onlineLocalPlayerId: string | undefined
   private readonly onRankingChange: (ranking: RankingEntry[]) => void
   private lastTime = performance.now()
   private lastRankingUpdate = 0
@@ -61,14 +64,13 @@ export class GameSession {
     if (options.initialWindConditions) this.race.setWindConditions(options.initialWindConditions)
     this.onLocalBoatState = options.onlineRace?.onLocalBoatState
     if (options.onlineRace) {
+      this.onlineLocalPlayerId = options.onlineRace.localPlayerId
       const localPlayer = options.onlineRace.players.find((player) => player.id === options.onlineRace!.localPlayerId)
       this.playerOne = this.createBoat(localPlayer ?? { id: options.onlineRace.localPlayerId, name: 'You', color: '#54d981' }, 0)
       this.race.addBoat(this.playerOne)
       for (const player of options.onlineRace.players) {
         if (player.id === this.playerOne.id) continue
-        const boat = new RemoteBoat({ ...this.boatOptions(player, this.remoteBoats.size + 1), tack: player.tack ?? 'starboard' })
-        this.remoteBoats.set(player.id, boat)
-        this.race.addBoat(boat)
+        this.addRemoteBoat(player)
       }
       return
     }
@@ -126,6 +128,20 @@ export class GameSession {
     this.remoteBoats.get(playerId)?.updateState(state)
   }
 
+  syncOnlinePlayers(players: OnlineRacePlayer[]): void {
+    if (!this.onlineLocalPlayerId) return
+    const playerIds = new Set(players.map((player) => player.id))
+    for (const playerId of this.remoteBoats.keys()) {
+      if (playerIds.has(playerId)) continue
+      this.remoteBoats.delete(playerId)
+      this.race.removeBoat(playerId)
+    }
+    for (const player of players) {
+      if (player.id === this.onlineLocalPlayerId || this.remoteBoats.has(player.id)) continue
+      this.addRemoteBoat(player)
+    }
+  }
+
   private frame = (now: number): void => {
     const deltaSeconds = Math.min((now - this.lastTime) / 1_000, 0.05)
     this.lastTime = now
@@ -176,6 +192,12 @@ export class GameSession {
 
   private createBoat(player: { id: string; name: string; color: string; start?: { x: number; y: number }; tack?: Tack }, index: number): Boat {
     return new Boat({ ...this.boatOptions(player, index), tack: player.tack ?? 'starboard' })
+  }
+
+  private addRemoteBoat(player: OnlineRacePlayer): void {
+    const boat = new RemoteBoat({ ...this.boatOptions(player, this.remoteBoats.size + 1), tack: player.tack ?? 'starboard' })
+    this.remoteBoats.set(player.id, boat)
+    this.race.addBoat(boat)
   }
 
   private boatOptions(player: { id: string; name: string; color: string; start?: { x: number; y: number } }, index: number): { id: string; name: string; color: string; outlineColor: string; start: { x: number; y: number } } {
