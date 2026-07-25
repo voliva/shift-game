@@ -6,6 +6,9 @@ type Player = {
   id: string
   name: string
   isAdmin: boolean
+  color?: string
+  start?: { x: number; y: number }
+  tack?: 'port' | 'starboard'
 }
 
 type Room = {
@@ -37,6 +40,7 @@ const rooms = new Map<string, Room>()
 const websocketServer = new WebSocketServer({ noServer: true })
 const SHIFT_INTENSITY = 45
 const MAX_DEVIATION = 45
+const BOAT_COLORS = ['#54d981', '#a78bfa', '#f5b84b', '#fb7185', '#38bdf8', '#f97316', '#e879f9', '#2dd4bf']
 
 setInterval(() => {
   const now = Date.now()
@@ -137,6 +141,7 @@ function handleMessage(room: Room, connection: WebSocket, rawMessage: string): v
   }
 
   if (isStartRaceMessage(message)) startRace(room, connection, player)
+  if (isBoatStateMessage(message)) broadcastBoatState(room, connection, player, message)
 }
 
 function isRenameMessage(message: unknown): message is { type: 'set-name'; name: string } {
@@ -155,6 +160,12 @@ function isStartRaceMessage(message: unknown): message is { type: 'start-race' }
   return Boolean(message && typeof message === 'object' && (message as { type?: unknown }).type === 'start-race')
 }
 
+function isBoatStateMessage(message: unknown): message is { type: 'boat-state'; x: number; y: number; tack: 'port' | 'starboard' } {
+  if (!message || typeof message !== 'object') return false
+  const candidate = message as { type?: unknown; x?: unknown; y?: unknown; tack?: unknown }
+  return candidate.type === 'boat-state' && Number.isFinite(candidate.x) && Number.isFinite(candidate.y) && (candidate.tack === 'port' || candidate.tack === 'starboard')
+}
+
 function startRace(room: Room, connection: WebSocket, player: Player): void {
   if (!player.isAdmin) {
     send(connection, { type: 'error', error: 'Only the host can start the race.' })
@@ -166,10 +177,42 @@ function startRace(room: Room, connection: WebSocket, player: Player): void {
   }
   if (room.status === 'ongoing') return
 
+  assignBoatColors(room)
+  assignStartingPositions(room)
   room.status = 'ongoing'
   const startTimestamp = Date.now() + 3_000
   broadcastRoomState(room)
   broadcast(room, { type: 'race-start', startTimestamp })
+}
+
+function assignBoatColors(room: Room): void {
+  const colors = [...BOAT_COLORS].sort(() => Math.random() - 0.5)
+  let index = 0
+  for (const sailor of room.players.values()) {
+    sailor.color = colors[index % colors.length]
+    index += 1
+  }
+}
+
+function assignStartingPositions(room: Room): void {
+  const sailors = [...room.players.values()]
+  sailors.forEach((sailor, index) => {
+    sailor.start = { x: (index - (sailors.length - 1) / 2) * 100, y: 0 }
+    sailor.tack = Math.random() < 0.5 ? 'port' : 'starboard'
+  })
+}
+
+function broadcastBoatState(
+  room: Room,
+  sender: WebSocket,
+  player: Player,
+  state: { x: number; y: number; tack: 'port' | 'starboard' },
+): void {
+  if (room.status !== 'ongoing') return
+  const message = { type: 'boat-state', playerId: player.id, x: state.x, y: state.y, tack: state.tack }
+  for (const connection of room.players.keys()) {
+    if (connection !== sender) send(connection, message)
+  }
 }
 
 function removePlayer(room: Room, connection: WebSocket): void {

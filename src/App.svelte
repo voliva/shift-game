@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from 'svelte'
   import { GameSession, type RankingEntry } from './game/GameSession'
   import type { WindConditions } from './game/Wind'
+  import type { RemoteBoatState } from './game/RemoteBoat'
   import Credits from './ui/Credits.svelte'
   import MainMenu from './ui/MainMenu.svelte'
   import { createRoom as createServerRoom, fetchRooms, joinRoom as joinServerRoom, type RoomConnection } from './network/roomApi'
@@ -28,6 +29,7 @@
   let session: GameSession | undefined
   let roomConnection: RoomConnection | undefined
   let onlineWindConditions: WindConditions | undefined
+  const remoteBoatStates = new Map<string, RemoteBoatState>()
   let localServerPlayerId: string | undefined
   let countdownToken = 0
   let pendingStart = false
@@ -82,7 +84,8 @@
     try {
       roomConnection?.socket.close()
       onlineWindConditions = undefined
-      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions)
+      remoteBoatStates.clear()
+      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions, applyRemoteBoatState)
       roomConnection = connection
       localServerPlayerId = connection.player.id
       currentRoom = { ...connection.room, password }
@@ -101,7 +104,8 @@
     try {
       roomConnection?.socket.close()
       onlineWindConditions = undefined
-      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions)
+      remoteBoatStates.clear()
+      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState, startOnlineCountdown, applyWindConditions, applyRemoteBoatState)
       roomConnection = connection
       localServerPlayerId = connection.player.id
       currentRoom = { ...connection.room, password }
@@ -153,6 +157,12 @@
     session?.setWindConditions(conditions)
   }
 
+  function applyRemoteBoatState(playerId: string, state: RemoteBoatState): void {
+    if (playerId === localServerPlayerId) return
+    remoteBoatStates.set(playerId, state)
+    session?.updateRemoteBoat(playerId, state)
+  }
+
   async function beginCountdown(startAt = Date.now() + 3_000): Promise<void> {
     stopGame()
     pendingStart = true
@@ -174,8 +184,21 @@
   }
 
   function startGame(gameCanvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement): void {
-    session = new GameSession(gameCanvas, minimapCanvas, (nextRanking) => ranking = nextRanking, onlineWindConditions)
+    const onlineRace = currentRoom && localServerPlayerId ? {
+      localPlayerId: localServerPlayerId,
+      players: currentRoom.players.map((player) => ({
+        id: player.id, name: player.name, color: player.color ?? '#54d981', start: player.start, tack: player.tack,
+      })),
+      onLocalBoatState: broadcastLocalBoatState,
+    } : undefined
+    session = new GameSession(gameCanvas, minimapCanvas, (nextRanking) => ranking = nextRanking, { initialWindConditions: onlineWindConditions, onlineRace })
+    for (const [playerId, state] of remoteBoatStates) session.updateRemoteBoat(playerId, state)
     session.start(pendingStart)
+  }
+
+  function broadcastLocalBoatState(state: RemoteBoatState): void {
+    if (currentRoom?.status !== 'ongoing' || roomConnection?.socket.readyState !== WebSocket.OPEN) return
+    roomConnection.socket.send(JSON.stringify({ type: 'boat-state', ...state }))
   }
 
   function stopGame(): void {
@@ -217,6 +240,7 @@
     roomConnection = undefined
     localServerPlayerId = undefined
     onlineWindConditions = undefined
+    remoteBoatStates.clear()
     currentRoom = undefined
     clearRoomUrl()
     screen = 'rooms'

@@ -6,6 +6,8 @@ import { RemoteBoat } from './RemoteBoat'
 import { RemoteBoatDemo } from './RemoteBoatDemo'
 import { SimpleAiController } from './SimpleAiController'
 import type { WindConditions } from './Wind'
+import type { RemoteBoatState } from './RemoteBoat'
+import type { Tack } from './types'
 
 export type RankingEntry = {
   id: string
@@ -15,28 +17,31 @@ export type RankingEntry = {
   rank: number
 }
 
+export type OnlineRaceSetup = {
+  localPlayerId: string
+  players: { id: string; name: string; color: string; start?: { x: number; y: number }; tack?: Tack }[]
+  onLocalBoatState: (state: RemoteBoatState) => void
+}
+
+export type GameSessionOptions = {
+  initialWindConditions?: WindConditions
+  onlineRace?: OnlineRaceSetup
+}
+
 export class GameSession {
   private readonly race = new Race()
-  private readonly playerOne = new Boat({
-    id: 'player-one', name: 'Player One', color: '#54d981', outlineColor: '#0c4b32', start: { x: -70, y: 0 }, tack: 'starboard',
-  })
-  private readonly playerTwo = new RemoteBoat({
-    id: 'player-two', name: 'Remote Demo', color: '#a78bfa', outlineColor: '#4c1d95', start: { x: 70, y: 0 }, tack: 'port',
-  })
-  private readonly aiBoat = new Boat({
-    id: 'ai-boat', name: 'Navigator AI', color: '#f5b84b', outlineColor: '#8a4b08', start: { x: 0, y: -120 }, tack: 'starboard',
-  })
-  private readonly remoteSource = new Boat({
-    id: 'demo-remote-source', name: 'Remote Demo Source', color: '#a78bfa', outlineColor: '#4c1d95', start: { x: 70, y: 0 }, tack: 'port',
-  })
+  private readonly playerOne: Boat
+  private readonly remoteBoats = new Map<string, RemoteBoat>()
   private readonly fieldRenderer: CanvasRenderer
   private readonly minimapRenderer: MinimapRenderer
-  private readonly aiController = new SimpleAiController(this.aiBoat)
-  private readonly remoteAiController = new SimpleAiController(this.remoteSource)
-  private readonly remoteBoatDemo: RemoteBoatDemo
+  private readonly aiController: SimpleAiController | undefined
+  private readonly remoteAiController: SimpleAiController | undefined
+  private readonly remoteBoatDemo: RemoteBoatDemo | undefined
+  private readonly onLocalBoatState: ((state: RemoteBoatState) => void) | undefined
   private readonly onRankingChange: (ranking: RankingEntry[]) => void
   private lastTime = performance.now()
   private lastRankingUpdate = 0
+  private lastBoatStateUpdate = 0
   private animationFrame = 0
   private paused = false
 
@@ -44,7 +49,7 @@ export class GameSession {
     gameCanvas: HTMLCanvasElement,
     minimapCanvas: HTMLCanvasElement,
     onRankingChange: (ranking: RankingEntry[]) => void,
-    initialWindConditions?: WindConditions,
+    options: GameSessionOptions = {},
   ) {
     const gameContext = gameCanvas.getContext('2d')
     const minimapContext = minimapCanvas.getContext('2d')
@@ -53,11 +58,39 @@ export class GameSession {
     this.fieldRenderer = new CanvasRenderer(gameCanvas, gameContext)
     this.minimapRenderer = new MinimapRenderer(minimapCanvas, minimapContext)
     this.onRankingChange = onRankingChange
-    if (initialWindConditions) this.race.setWindConditions(initialWindConditions)
+    if (options.initialWindConditions) this.race.setWindConditions(options.initialWindConditions)
+    this.onLocalBoatState = options.onlineRace?.onLocalBoatState
+    if (options.onlineRace) {
+      const localPlayer = options.onlineRace.players.find((player) => player.id === options.onlineRace!.localPlayerId)
+      this.playerOne = this.createBoat(localPlayer ?? { id: options.onlineRace.localPlayerId, name: 'You', color: '#54d981' }, 0)
+      this.race.addBoat(this.playerOne)
+      for (const player of options.onlineRace.players) {
+        if (player.id === this.playerOne.id) continue
+        const boat = new RemoteBoat({ ...this.boatOptions(player, this.remoteBoats.size + 1), tack: player.tack ?? 'starboard' })
+        this.remoteBoats.set(player.id, boat)
+        this.race.addBoat(boat)
+      }
+      return
+    }
+
+    this.playerOne = new Boat({
+      id: 'player-one', name: 'Player One', color: '#54d981', outlineColor: '#0c4b32', start: { x: -70, y: 0 }, tack: 'starboard',
+    })
+    const playerTwo = new RemoteBoat({
+      id: 'player-two', name: 'Remote Demo', color: '#a78bfa', outlineColor: '#4c1d95', start: { x: 70, y: 0 }, tack: 'port',
+    })
+    const aiBoat = new Boat({
+      id: 'ai-boat', name: 'Navigator AI', color: '#f5b84b', outlineColor: '#8a4b08', start: { x: 0, y: -120 }, tack: 'starboard',
+    })
+    const remoteSource = new Boat({
+      id: 'demo-remote-source', name: 'Remote Demo Source', color: '#a78bfa', outlineColor: '#4c1d95', start: { x: 70, y: 0 }, tack: 'port',
+    })
     this.race.addBoat(this.playerOne)
-    this.race.addBoat(this.playerTwo)
-    this.race.addBoat(this.aiBoat)
-    this.remoteBoatDemo = new RemoteBoatDemo(this.remoteSource, this.playerTwo)
+    this.race.addBoat(playerTwo)
+    this.race.addBoat(aiBoat)
+    this.aiController = new SimpleAiController(aiBoat)
+    this.remoteAiController = new SimpleAiController(remoteSource)
+    this.remoteBoatDemo = new RemoteBoatDemo(remoteSource, playerTwo)
   }
 
   start(paused = false): void {
@@ -70,7 +103,7 @@ export class GameSession {
 
   destroy(): void {
     cancelAnimationFrame(this.animationFrame)
-    this.remoteBoatDemo.destroy()
+    this.remoteBoatDemo?.destroy()
     window.removeEventListener('resize', this.resize)
     window.removeEventListener('keydown', this.handleKeydown)
   }
@@ -89,15 +122,23 @@ export class GameSession {
     this.race.setWindConditions(conditions)
   }
 
+  updateRemoteBoat(playerId: string, state: RemoteBoatState): void {
+    this.remoteBoats.get(playerId)?.updateState(state)
+  }
+
   private frame = (now: number): void => {
     const deltaSeconds = Math.min((now - this.lastTime) / 1_000, 0.05)
     this.lastTime = now
     if (!this.paused) {
       this.race.updateWind(now, deltaSeconds)
-      this.remoteBoatDemo.update(deltaSeconds, this.race.wind.direction)
-      this.aiController.update(now, this.race.wind.direction, this.race.wind.meanDirection)
-      this.remoteAiController.update(now, this.race.wind.direction, this.race.wind.meanDirection)
+      this.remoteBoatDemo?.update(deltaSeconds, this.race.wind.direction)
+      this.aiController?.update(now, this.race.wind.direction, this.race.wind.meanDirection)
+      this.remoteAiController?.update(now, this.race.wind.direction, this.race.wind.meanDirection)
       for (const boat of this.race.boats) boat.update(deltaSeconds, this.race.wind.direction)
+      if (this.onLocalBoatState && now - this.lastBoatStateUpdate >= 100) {
+        this.lastBoatStateUpdate = now
+        this.onLocalBoatState({ ...this.playerOne.position, tack: this.playerOne.currentTack })
+      }
     }
 
     this.fieldRenderer.render(this.race.boats, this.playerOne, this.race.wind.direction, this.race.wind.meanDirection)
@@ -131,5 +172,19 @@ export class GameSession {
       gap: leader.position.y - boat.position.y,
       rank: index + 1,
     })))
+  }
+
+  private createBoat(player: { id: string; name: string; color: string; start?: { x: number; y: number }; tack?: Tack }, index: number): Boat {
+    return new Boat({ ...this.boatOptions(player, index), tack: player.tack ?? 'starboard' })
+  }
+
+  private boatOptions(player: { id: string; name: string; color: string; start?: { x: number; y: number } }, index: number): { id: string; name: string; color: string; outlineColor: string; start: { x: number; y: number } } {
+    return {
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      outlineColor: '#082f49',
+      start: player.start ?? { x: (index - 1) * 70, y: 0 },
+    }
   }
 }

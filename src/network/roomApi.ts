@@ -1,12 +1,14 @@
 import type { Player, RoomSummary } from '../ui/roomTypes'
 import type { WindConditions } from '../game/Wind'
+import type { RemoteBoatState } from '../game/RemoteBoat'
 
 type RoomMessage = { type: 'room-state'; room: RoomSummary }
 type JoinedMessage = { type: 'joined'; room: RoomSummary; player: Player }
 type PongMessage = { type: 'pong'; clientTimestamp: number; serverTimestamp: number }
 type RaceStartMessage = { type: 'race-start'; startTimestamp: number }
 type WindConditionsMessage = { type: 'wind-conditions' } & WindConditions
-type ServerMessage = RoomMessage | JoinedMessage | PongMessage | RaceStartMessage | WindConditionsMessage | { type: 'error'; error: string }
+type BoatStateMessage = { type: 'boat-state'; playerId: string } & RemoteBoatState
+type ServerMessage = RoomMessage | JoinedMessage | PongMessage | RaceStartMessage | WindConditionsMessage | BoatStateMessage | { type: 'error'; error: string }
 
 const httpBaseUrl = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:8787'
 const websocketBaseUrl = httpBaseUrl.replace(/^http/, 'ws')
@@ -32,9 +34,10 @@ export function createRoom(
   onRoomState: (room: RoomSummary) => void,
   onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
   onWindConditions: (conditions: WindConditions) => void,
+  onBoatState: (playerId: string, state: RemoteBoatState) => void,
 ): Promise<RoomConnection> {
   const query = new URLSearchParams({ name, password, playerName })
-  return connect(`/ws/create?${query}`, onRoomState, onRaceStart, onWindConditions)
+  return connect(`/ws/create?${query}`, onRoomState, onRaceStart, onWindConditions, onBoatState)
 }
 
 export function joinRoom(
@@ -44,9 +47,10 @@ export function joinRoom(
   onRoomState: (room: RoomSummary) => void,
   onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
   onWindConditions: (conditions: WindConditions) => void,
+  onBoatState: (playerId: string, state: RemoteBoatState) => void,
 ): Promise<RoomConnection> {
   const query = new URLSearchParams({ roomId, password, playerName })
-  return connect(`/ws/join?${query}`, onRoomState, onRaceStart, onWindConditions)
+  return connect(`/ws/join?${query}`, onRoomState, onRaceStart, onWindConditions, onBoatState)
 }
 
 function connect(
@@ -54,6 +58,7 @@ function connect(
   onRoomState: (room: RoomSummary) => void,
   onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
   onWindConditions: (conditions: WindConditions) => void,
+  onBoatState: (playerId: string, state: RemoteBoatState) => void,
 ): Promise<RoomConnection> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`${websocketBaseUrl}${path}`)
@@ -73,6 +78,7 @@ function connect(
       }
       if (message.type === 'race-start') onRaceStart(message.startTimestamp, getServerClockOffset)
       if (message.type === 'wind-conditions') onWindConditions(message)
+      if (message.type === 'boat-state') onBoatState(message.playerId, message)
       if (message.type === 'joined') {
         connected = true
         resolve({ socket, room: message.room, player: message.player, getServerClockOffset })

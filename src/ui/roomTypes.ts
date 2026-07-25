@@ -1,4 +1,11 @@
-export type Player = { id: string; name: string; isAdmin?: boolean }
+export type Player = {
+  id: string
+  name: string
+  isAdmin?: boolean
+  color?: string
+  start?: { x: number; y: number }
+  tack?: 'port' | 'starboard'
+}
 
 export type RoomSummary = {
   id: string
