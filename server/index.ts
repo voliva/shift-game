@@ -101,17 +101,53 @@ function handleMessage(room: Room, connection: WebSocket, rawMessage: string): v
     return
   }
 
-  if (!isRenameMessage(message)) return
+  if (isPingMessage(message)) {
+    send(connection, { type: 'pong', clientTimestamp: message.clientTimestamp, serverTimestamp: Date.now() })
+    return
+  }
+
   const player = room.players.get(connection)
   if (!player) return
-  player.name = message.name.trim().slice(0, 40) || player.name
-  broadcastRoomState(room)
+  if (isRenameMessage(message)) {
+    player.name = message.name.trim().slice(0, 40) || player.name
+    broadcastRoomState(room)
+    return
+  }
+
+  if (isStartRaceMessage(message)) startRace(room, connection, player)
 }
 
 function isRenameMessage(message: unknown): message is { type: 'set-name'; name: string } {
   if (!message || typeof message !== 'object') return false
   const candidate = message as { type?: unknown; name?: unknown }
   return candidate.type === 'set-name' && typeof candidate.name === 'string'
+}
+
+function isPingMessage(message: unknown): message is { type: 'ping'; clientTimestamp: number } {
+  if (!message || typeof message !== 'object') return false
+  const candidate = message as { type?: unknown; clientTimestamp?: unknown }
+  return candidate.type === 'ping' && typeof candidate.clientTimestamp === 'number'
+}
+
+function isStartRaceMessage(message: unknown): message is { type: 'start-race' } {
+  return Boolean(message && typeof message === 'object' && (message as { type?: unknown }).type === 'start-race')
+}
+
+function startRace(room: Room, connection: WebSocket, player: Player): void {
+  if (!player.isAdmin) {
+    send(connection, { type: 'error', error: 'Only the host can start the race.' })
+    return
+  }
+  if (room.players.size < 2) {
+    send(connection, { type: 'error', error: 'At least two sailors are needed to start.' })
+    return
+  }
+  if (room.status === 'ongoing') return
+
+  room.status = 'ongoing'
+  const startTimestamp = Date.now() + 3_000
+  broadcastRoomState(room)
+  broadcast(room, { type: 'race-start', startTimestamp })
 }
 
 function removePlayer(room: Room, connection: WebSocket): void {
@@ -131,7 +167,10 @@ function removePlayer(room: Room, connection: WebSocket): void {
 }
 
 function broadcastRoomState(room: Room): void {
-  const message = { type: 'room-state', room: toPublicRoom(room) }
+  broadcast(room, { type: 'room-state', room: toPublicRoom(room) })
+}
+
+function broadcast(room: Room, message: unknown): void {
   for (const connection of room.players.keys()) send(connection, message)
 }
 

@@ -79,7 +79,7 @@
     if (!password) return 'Enter the room password to join.'
     try {
       roomConnection?.socket.close()
-      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState)
+      const connection = await joinServerRoom(roomId, password, boatName, applyServerRoomState, startOnlineCountdown)
       roomConnection = connection
       localServerPlayerId = connection.player.id
       currentRoom = { ...connection.room, password }
@@ -97,7 +97,7 @@
   async function createRoom(name: string, password: string): Promise<string | undefined> {
     try {
       roomConnection?.socket.close()
-      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState)
+      const connection = await createServerRoom(name.trim(), password, boatName, applyServerRoomState, startOnlineCountdown)
       roomConnection = connection
       localServerPlayerId = connection.player.id
       currentRoom = { ...connection.room, password }
@@ -129,22 +129,29 @@
     currentRoom = { ...currentRoom, gateDistance, gatesToWin }
   }
 
-  async function startOnlineRace(): Promise<void> {
+  function startOnlineRace(): void {
     if (!currentRoom || !localPlayerIsAdmin() || currentRoom.players.length < 2) return
-    currentRoom = { ...currentRoom, status: 'ongoing' }
-    await beginCountdown()
+    roomConnection?.socket.send(JSON.stringify({ type: 'start-race' }))
   }
 
-  async function beginCountdown(): Promise<void> {
+  function startOnlineCountdown(startTimestamp: number, getServerClockOffset: () => number): void {
+    const estimatedServerNow = Date.now() + getServerClockOffset()
+    void beginCountdown(Date.now() + Math.max(0, startTimestamp - estimatedServerNow))
+  }
+
+  async function beginCountdown(startAt = Date.now() + 3_000): Promise<void> {
     stopGame()
     pendingStart = true
     screen = 'race'
     const token = ++countdownToken
     await tick()
     if (token !== countdownToken) return
-    for (let value = 3; value > 0; value -= 1) {
-      countdown = value
-      await delay(1_000)
+    while (true) {
+      const remaining = startAt - Date.now()
+      if (remaining <= 0) break
+      countdown = Math.ceil(remaining / 1_000)
+      const nextBoundary = startAt - (countdown - 1) * 1_000
+      await delay(Math.max(1, nextBoundary - Date.now()))
       if (token !== countdownToken) return
     }
     countdown = 0

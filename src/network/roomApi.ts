@@ -2,7 +2,9 @@ import type { Player, RoomSummary } from '../ui/roomTypes'
 
 type RoomMessage = { type: 'room-state'; room: RoomSummary }
 type JoinedMessage = { type: 'joined'; room: RoomSummary; player: Player }
-type ServerMessage = RoomMessage | JoinedMessage | { type: 'error'; error: string }
+type PongMessage = { type: 'pong'; clientTimestamp: number; serverTimestamp: number }
+type RaceStartMessage = { type: 'race-start'; startTimestamp: number }
+type ServerMessage = RoomMessage | JoinedMessage | PongMessage | RaceStartMessage | { type: 'error'; error: string }
 
 const httpBaseUrl = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:8787'
 const websocketBaseUrl = httpBaseUrl.replace(/^http/, 'ws')
@@ -11,6 +13,7 @@ export type RoomConnection = {
   socket: WebSocket
   room: RoomSummary
   player: Player
+  getServerClockOffset: () => number
 }
 
 export async function fetchRooms(): Promise<RoomSummary[]> {
@@ -25,9 +28,10 @@ export function createRoom(
   password: string,
   playerName: string,
   onRoomState: (room: RoomSummary) => void,
+  onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
 ): Promise<RoomConnection> {
   const query = new URLSearchParams({ name, password, playerName })
-  return connect(`/ws/create?${query}`, onRoomState)
+  return connect(`/ws/create?${query}`, onRoomState, onRaceStart)
 }
 
 export function joinRoom(
@@ -35,22 +39,37 @@ export function joinRoom(
   password: string,
   playerName: string,
   onRoomState: (room: RoomSummary) => void,
+  onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
 ): Promise<RoomConnection> {
   const query = new URLSearchParams({ roomId, password, playerName })
-  return connect(`/ws/join?${query}`, onRoomState)
+  return connect(`/ws/join?${query}`, onRoomState, onRaceStart)
 }
 
-function connect(path: string, onRoomState: (room: RoomSummary) => void): Promise<RoomConnection> {
+function connect(
+  path: string,
+  onRoomState: (room: RoomSummary) => void,
+  onRaceStart: (startTimestamp: number, getServerClockOffset: () => number) => void,
+): Promise<RoomConnection> {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`${websocketBaseUrl}${path}`)
     let connected = false
+    let serverClockOffset = 0
+    const getServerClockOffset = () => serverClockOffset
+    socket.addEventListener('open', () => {
+      socket.send(JSON.stringify({ type: 'ping', clientTimestamp: Date.now() }))
+    })
     socket.addEventListener('message', (event) => {
       const message = parseMessage(event.data)
       if (!message) return
       if (message.type === 'room-state') onRoomState(message.room)
+      if (message.type === 'pong') {
+        const roundTripTime = Date.now() - message.clientTimestamp
+        serverClockOffset = message.serverTimestamp - (message.clientTimestamp + roundTripTime / 2)
+      }
+      if (message.type === 'race-start') onRaceStart(message.startTimestamp, getServerClockOffset)
       if (message.type === 'joined') {
         connected = true
-        resolve({ socket, room: message.room, player: message.player })
+        resolve({ socket, room: message.room, player: message.player, getServerClockOffset })
       }
       if (message.type === 'error' && !connected) reject(new Error(message.error))
     })
