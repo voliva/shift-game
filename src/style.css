@@ -56,10 +56,11 @@ button { cursor: pointer; }
   box-shadow: 0 20px 60px rgb(0 57 91 / 25%);
 }
 .main-menu { width: min(410px, calc(100vw - 40px)); text-align: center; }
+.language-picker { display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; color: #52748a; font-size: 12px; font-weight: 700; }
+.language-picker select { width: auto; padding: 5px 8px; color: #063d63; border: 1px solid #bad6e5; border-radius: 6px; background: white; font: inherit; }
 .eyebrow { margin: 0 0 8px; color: #087bb5; font-size: 12px; font-weight: 800; letter-spacing: .14em; }
 h1 { margin: 0; font-size: clamp(32px, 5vw, 48px); letter-spacing: -.05em; }
 h2 { margin: 0 0 14px; font-size: 15px; }
-.intro { margin: 14px 0 26px; color: #35617c; }
 
 .primary,
 .secondary,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { RoomSummary } from './roomTypes'
   import { GATE_DISTANCE_MULTIPLIER } from '../game/constants'
+  import { language, messages } from '../i18n'
 
   export let rooms: RoomSummary[]
   export let loading: boolean
@@ -42,21 +43,21 @@
 <section class="panel rooms-panel">
   <header class="panel-header">
     <div>
-      <p class="eyebrow">ONLINE PLAY</p>
-      <h1>Find a room</h1>
+      <p class="eyebrow">{messages[$language].onlinePlayLabel}</p>
+      <h1>{messages[$language].findRoom}</h1>
     </div>
     <div class="panel-actions">
-      <button class="text-button" onclick={onRefresh}>Refresh</button>
-      <button class="text-button" onclick={onBack}>Back</button>
+      <button class="text-button" onclick={onRefresh}>{messages[$language].refresh}</button>
+      <button class="text-button" onclick={onBack}>{messages[$language].back}</button>
     </div>
   </header>
   {#if loading}
-    <p class="loading">Looking for rooms...</p>
+    <p class="loading">{messages[$language].lookingForRooms}</p>
   {:else if externalError}
     <section class="online-unavailable" aria-live="polite">
-      <h2>Online play is unavailable</h2>
+      <h2>{messages[$language].onlineUnavailable}</h2>
       <p>{externalError}</p>
-      <button class="secondary" onclick={onRefresh}>Try again</button>
+      <button class="secondary" onclick={onRefresh}>{messages[$language].tryAgain}</button>
     </section>
   {:else}
     <div class="room-list">
@@ -64,30 +65,30 @@
         <button class="room-card" onclick={() => selectRoom(room)}>
           <span>
             <strong>{room.name}</strong>
-            <small>{room.players.length} sailors · {Math.round(room.gateDistance / GATE_DISTANCE_MULTIPLIER)} seconds to gate</small>
+            <small>{room.players.length} {messages[$language].sailors} · {Math.round(room.gateDistance / GATE_DISTANCE_MULTIPLIER)} {messages[$language].secondsToGate}</small>
           </span>
-          <em class:ongoing={room.status === 'ongoing'}>{room.status}</em>
+          <em class:ongoing={room.status === 'ongoing'}>{room.status === 'ongoing' ? messages[$language].ongoing : messages[$language].waiting}</em>
         </button>
       {/each}
     </div>
     <form class="create-room" autocomplete="off" onsubmit={createRoom}>
-      <h2>Create a room</h2>
-      <input aria-label="Room name" name="room-name" autocomplete="off" placeholder="Room name" bind:value={newRoomName} />
-      <input aria-label="New room password" name="room-password" autocomplete="off" type="text" placeholder="Password" bind:value={newRoomPassword} />
-      <button class="secondary" disabled={creatingRoom}>{creatingRoom ? 'Creating...' : 'Create room'}</button>
+      <h2>{messages[$language].createRoom}</h2>
+      <input aria-label={messages[$language].roomName} name="room-name" autocomplete="off" placeholder={messages[$language].roomName} bind:value={newRoomName} />
+      <input aria-label={messages[$language].password} name="room-password" autocomplete="off" type="text" placeholder={messages[$language].password} bind:value={newRoomPassword} />
+      <button class="secondary" disabled={creatingRoom}>{creatingRoom ? messages[$language].creating : messages[$language].create}</button>
     </form>
     {#if passwordPromptRoom}
       <div class="dialog-backdrop" role="presentation">
         <form class="password-dialog" autocomplete="off" onsubmit={submitJoin}>
-          <p class="eyebrow">JOIN ROOM</p>
+          <p class="eyebrow">{messages[$language].joinRoom}</p>
           <h2>{passwordPromptRoom.name}</h2>
-          <label class="field-label">Room password
-            <input aria-label="Room password" name="join-room-password" autocomplete="off" type="text" placeholder="Password" bind:value={roomPassword} />
+          <label class="field-label">{messages[$language].password}
+            <input aria-label={messages[$language].password} name="join-room-password" autocomplete="off" type="text" placeholder={messages[$language].password} bind:value={roomPassword} />
           </label>
           {#if roomError}<p class="form-error">{roomError}</p>{/if}
           <div class="dialog-actions">
-            <button type="button" class="secondary" onclick={() => passwordPromptRoom = undefined}>Cancel</button>
-            <button class="primary">Join room</button>
+            <button type="button" class="secondary" onclick={() => passwordPromptRoom = undefined}>{messages[$language].cancel}</button>
+            <button class="primary">{messages[$language].join}</button>
           </div>
         </form>
       </div>

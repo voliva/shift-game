@@ -1,2 +1,4 @@
-<script lang="ts"></script>
-<footer class="credits">A small sailing game experiment · <a href="https://github.com" target="_blank" rel="noreferrer">GitHub</a> · <button class="link-button" onclick={() => alert('Shift Game is a modern port of the original Android prototype.')}>About</button></footer>
+<script lang="ts">
+</script>
+
+<footer class="credits"><a href="https://github.com/voliva/shift-game" target="_blank" rel="noreferrer">GitHub</a></footer>

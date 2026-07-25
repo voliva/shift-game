@@ -11,6 +11,8 @@
   import RoomLobby from './ui/RoomLobby.svelte'
   import type { Room, RoomSummary } from './ui/roomTypes'
   import { GATE_DISTANCE_MULTIPLIER } from './game/constants'
+  import { get } from 'svelte/store'
+  import { language, messages } from './i18n'
 
   type Screen = 'menu' | 'rooms' | 'lobby' | 'race'
   type FinishEntry = { id: string; name: string; color: string; rank: number }
@@ -75,7 +77,7 @@
     try {
       rooms = await fetchRooms()
     } catch {
-      roomsError = 'Online play is unavailable right now. Please try again later.'
+      roomsError = messages[get(language)].onlineUnavailableDetail
     }
     loadingRooms = false
   }
@@ -88,7 +90,7 @@
     try {
       rooms = await fetchRooms()
     } catch {
-      roomsError = 'Online play is unavailable right now. Please try again later.'
+      roomsError = messages[get(language)].onlineUnavailableDetail
       loadingRooms = false
       return
     }

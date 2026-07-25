@@ -6,6 +6,8 @@ import type { RemoteBoatState } from './RemoteBoat'
 import { RemoteBoat } from './RemoteBoat'
 import { SimpleAiBoat } from './SimpleAiController'
 import type { Point, Tack } from './types'
+import { get } from 'svelte/store'
+import { language, messages } from '../i18n'
 
 export type RankingEntry = {
   id: string
@@ -76,15 +78,16 @@ export class GameSession {
         throw new Error("Missing local player in online setup")
       }
     } else {
+      const localMessages = messages[get(language)]
       this.localPlayer = new Boat({
-        id: 'local', name: 'You', color: '#54d981'
+        id: 'local', name: localMessages.localPlayer, color: '#54d981'
       })
       this.localPlayer.placeInField(this.race, { x: -70, y: 0 }, 'starboard');
       this.race.addBoat(this.localPlayer)
 
       
       const aiBoat = new SimpleAiBoat({
-        id: 'ai-boat', name: 'Navigator AI', color: '#f5b84b'
+        id: 'ai-boat', name: localMessages.aiPlayer, color: '#f5b84b'
       })
       aiBoat.placeInField(this.race, { x: -120, y: 0 }, 'starboard');
       this.race.addBoat(aiBoat)
